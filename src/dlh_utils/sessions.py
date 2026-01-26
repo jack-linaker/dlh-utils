@@ -1,24 +1,28 @@
-'''
+"""
 Function used to create and start different sized spark sessions, also
 generating a Spark UI link to monitor session progress.
-'''
+"""
+
 import os
-from IPython.core.display import display, HTML
-from pyspark.sql import SparkSession
+
 import graphframes_jars as graphframes
+from IPython.display import HTML, display
+from pyspark.sql import SparkSession
 
 ##################################################################################
 
 
-def getOrCreateSparkSession(appName='DE_DL',
-                            size='large',
-                            showConsoleProgress='false',
-                            shufflePartitions=200,
-                            defaultParallelism=200,
-                            memory='10g',
-                            memoryOverhead='1g',
-                            cores=5,
-                            maxExecutors=5):
+def getOrCreateSparkSession(
+    appName="DE_DL",
+    size="large",
+    showConsoleProgress="false",
+    shufflePartitions=200,
+    defaultParallelism=200,
+    memory="10g",
+    memoryOverhead="1g",
+    cores=5,
+    maxExecutors=5,
+):
     """
     Starts spark session dependent on size category specified
     or starts custom session on specified parameters. Also generates
@@ -56,15 +60,18 @@ def getOrCreateSparkSession(appName='DE_DL',
       None at present.
     """
     # obtain spark UI url parameters
-    url = 'spark-' + str(os.environ['CDSW_ENGINE_ID']) + \
-        '.' + str(os.environ['CDSW_DOMAIN'])
-    spark_ui = display(HTML(f'<a href=http://{url}s>Spark UI</a>'))
+    url = (
+        "spark-"
+        + str(os.environ["CDSW_ENGINE_ID"])
+        + "."
+        + str(os.environ["CDSW_DOMAIN"])
+    )
+    spark_ui = display(HTML(f"<a href=http://{url}s>Spark UI</a>"))
 
     try:
-
         # get graphframes jar path to configure session with
         graphframes_path = graphframes.__file__
-        graphframes_path = graphframes_path.rsplit('/', 1)[0]
+        graphframes_path = graphframes_path.rsplit("/", 1)[0]
 
         for file in os.listdir(graphframes_path):
             if file.endswith(".jar"):
@@ -72,12 +79,13 @@ def getOrCreateSparkSession(appName='DE_DL',
                 jar_path = os.path.join(graphframes_path, file)
 
     except FileNotFoundError:
-        print("graphframes wrapper package not found.\
-              Please install this to use the cluster_number() function.")
+        print(
+            "graphframes wrapper package not found.\
+              Please install this to use the cluster_number() function."
+        )
         jar_path = None
 
-    if size == 'small':
-
+    if size == "small":
         spark = (
             SparkSession.builder.appName(appName)
             .config("spark.executor.memory", "1g")
@@ -93,8 +101,7 @@ def getOrCreateSparkSession(appName='DE_DL',
             .getOrCreate()
         )
 
-    if size == 'medium':
-
+    if size == "medium":
         spark = (
             SparkSession.builder.appName(appName)
             .config("spark.executor.memory", "6g")
@@ -110,8 +117,7 @@ def getOrCreateSparkSession(appName='DE_DL',
             .getOrCreate()
         )
 
-    if size == 'large':
-
+    if size == "large":
         spark = (
             SparkSession.builder.appName(appName)
             .config("spark.executor.memory", "10g")
@@ -127,8 +133,7 @@ def getOrCreateSparkSession(appName='DE_DL',
             .getOrCreate()
         )
 
-    if size == 'extra_large':
-
+    if size == "extra_large":
         spark = (
             SparkSession.builder.appName(appName)
             .config("spark.executor.memory", "20g")
@@ -144,17 +149,16 @@ def getOrCreateSparkSession(appName='DE_DL',
             .getOrCreate()
         )
 
-    if size == 'custom':
-
+    if size == "custom":
         spark = (
             SparkSession.builder.appName(appName)
-            .config('spark.executor.memory', memory)
-            .config('spark.executor.memoryOverhead', memoryOverhead)
-            .config('spark.executor.cores', cores)
-            .config('spark.dynamicAllocation.maxExecutors', maxExecutors)
+            .config("spark.executor.memory", memory)
+            .config("spark.executor.memoryOverhead", memoryOverhead)
+            .config("spark.executor.cores", cores)
+            .config("spark.dynamicAllocation.maxExecutors", maxExecutors)
             .config("spark.sql.shuffle.partitions", shufflePartitions)
             .config("spark.default.parallelism", defaultParallelism)
-            .config('spark.ui.showConsoleProgress', showConsoleProgress)
+            .config("spark.ui.showConsoleProgress", showConsoleProgress)
             .config("spark.jars", jar_path)
             .config("spark.sql.repl.eagerEval.enabled", "true")
             .config("spark.shuffle.service.enabled", "true")

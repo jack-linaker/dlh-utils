@@ -1,17 +1,26 @@
-'''
-Functions used to modify aspects of a dataframe prior to linkage.
-'''
+"""Functions used to modify aspects of a dataframe prior to linkage."""
+
 import re
+
 import pyspark.sql.functions as F
 from pyspark.sql import Window
+
 from dlh_utils import standardisation as st
 
 ##################################################################################
 
 
-def select(df, columns=None, startswith=None, endswith=None, contains=None,
-           regex=None, drop_duplicates=True):
-    """
+def select(
+    df,
+    columns=None,
+    startswith=None,
+    endswith=None,
+    contains=None,
+    regex=None,
+    drop_duplicates=True,
+):
+    """Retain only specified list of columns.
+
     Retains only specified list of columns or columns meeting startswith,
     endswith, contains or regex arguments.
 
@@ -63,16 +72,28 @@ def select(df, columns=None, startswith=None, endswith=None, contains=None,
     Example
     -------
 
-  data = [("1","Homer","Jay","Simpson","1983-05-12","M","ET74 2SP"),
-          ("2","Marge","Juliet","Simpson","1983-03-19","F","ET74 2SP"),
-          ("3","Bart","Jo-Jo","Simpson","2012-04-01","M","ET74 2SP"),
-          ("3","Bart","Jo-Jo","Simpson","2012-04-01","M","ET74 2SP"),
-          ("4","Lisa","Marie","Simpson","2014-05-09","F","ET74 2SP"),
-          ("5","Maggie",None,"Simpson","2021-01-12","F","ET74 2SP")]
-  df = spark.createDataFrame(data=data,schema=["ID","Forename","Middlename",\
-                                              "Surname","DoB","Sex","Postcode"])
+    >>> data = [
+            ("1", "Homer", "Jay", "Simpson", "1983-05-12", "M", "ET74 2SP"),
+            ("2", "Marge", "Juliet", "Simpson", "1983-03-19", "F", "ET74 2SP"),
+            ("3", "Bart", "Jo-Jo", "Simpson", "2012-04-01", "M", "ET74 2SP"),
+            ("3", "Bart", "Jo-Jo", "Simpson", "2012-04-01", "M", "ET74 2SP"),
+            ("4", "Lisa", "Marie", "Simpson", "2014-05-09", "F", "ET74 2SP"),
+            ("5", "Maggie", None, "Simpson", "2021-01-12", "F", "ET74 2SP"),
+        ]
+    >>> df = spark.createDataFrame(
+            data=data,
+            schema=[
+                "ID",
+                "Forename",
+                "Middlename",
+                "Surname",
+                "DoB",
+                "Sex",
+                "Postcode",
+            ],
+        )
 
-    > df.show()
+    >>> df.show()
     +---+--------+----------+-------+----------+---+--------+
     | ID|Forename|Middlename|Surname|       DoB|Sex|Postcode|
     +---+--------+----------+-------+----------+---+--------+
@@ -84,28 +105,28 @@ def select(df, columns=None, startswith=None, endswith=None, contains=None,
     |  5|  Maggie|      null|Simpson|2021-01-12|  F|ET74 2SP|
     +---+--------+----------+-------+----------+---+--------+
 
-    > select(df,columns = None, startswith = 'F').show()
-      +--------+
-      |Forename|
-      +--------+
-      |   Homer|
-      |   Marge|
-      |  Maggie|
-      |    Bart|
-      |    Lisa|
-      +--------+
+    >>> select(df, columns=None, startswith="F").show()
+    +--------+
+    |Forename|
+    +--------+
+    |   Homer|
+    |   Marge|
+    |  Maggie|
+    |    Bart|
+    |    Lisa|
+    +--------+
 
-    > select(df,columns = None, endswith = 'e',drop_duplicates = False).show()
-     +--------+----------+-------+--------+
-     |Forename|Middlename|Surname|Postcode|
-     +--------+----------+-------+--------+
-     |   Homer|       Jay|Simpson|ET74 2SP|
-     |   Marge|    Juliet|Simpson|ET74 2SP|
-     |    Bart|     Jo-Jo|Simpson|ET74 2SP|
-     |    Bart|     Jo-Jo|Simpson|ET74 2SP|
-     |    Lisa|     Marie|Simpson|ET74 2SP|
-     |  Maggie|      null|Simpson|ET74 2SP|
-     +--------+----------+-------+--------+
+    >>> select(df, columns=None, endswith="e", drop_duplicates=False).show()
+    +--------+----------+-------+--------+
+    |Forename|Middlename|Surname|Postcode|
+    +--------+----------+-------+--------+
+    |   Homer|       Jay|Simpson|ET74 2SP|
+    |   Marge|    Juliet|Simpson|ET74 2SP|
+    |    Bart|     Jo-Jo|Simpson|ET74 2SP|
+    |    Bart|     Jo-Jo|Simpson|ET74 2SP|
+    |    Lisa|     Marie|Simpson|ET74 2SP|
+    |  Maggie|      null|Simpson|ET74 2SP|
+    +--------+----------+-------+--------+
 
     > select(df,columns = None, contains = 'name').show()
      +--------+----------+-------+
@@ -134,35 +155,35 @@ def select(df, columns=None, startswith=None, endswith=None, contains=None,
         df = df.select(columns)
 
     if startswith is not None:
-        df = df.select(
-            [x for x in df.columns if x.startswith(startswith)]
-        )
+        df = df.select([x for x in df.columns if x.startswith(startswith)])
 
     if endswith is not None:
-        df = df.select(
-            [x for x in df.columns if x.endswith(endswith)]
-        )
+        df = df.select([x for x in df.columns if x.endswith(endswith)])
 
     if contains is not None:
-        df = df.select(
-            [x for x in df.columns if contains in x]
-        )
+        df = df.select([x for x in df.columns if contains in x])
 
     if regex is not None:
-        df = df.select(
-            [x for x in df.columns if re.search(regex, x)]
-        )
+        df = df.select([x for x in df.columns if re.search(regex, x)])
 
     if drop_duplicates:
         df = df.dropDuplicates()
 
     return df
 
+
 ###############################################################################
 
 
-def drop_columns(df, subset=None, startswith=None, endswith=None, contains=None,
-                 regex=None, drop_duplicates=True):
+def drop_columns(
+    df,
+    subset=None,
+    startswith=None,
+    endswith=None,
+    contains=None,
+    regex=None,
+    drop_duplicates=True,
+):
     """
     drop_columns allows user to specify one or more columns
     to be dropped from the dataframe.
@@ -274,24 +295,16 @@ def drop_columns(df, subset=None, startswith=None, endswith=None, contains=None,
     """
 
     if startswith is not None:
-        df = df.drop(
-            * [x for x in df.columns if x.startswith(startswith)]
-        )
+        df = df.drop(*[x for x in df.columns if x.startswith(startswith)])
 
     if endswith is not None:
-        df = df.drop(
-            * [x for x in df.columns if x.endswith(endswith)]
-        )
+        df = df.drop(*[x for x in df.columns if x.endswith(endswith)])
 
     if contains is not None:
-        df = df.drop(
-            * [x for x in df.columns if contains in x]
-        )
+        df = df.drop(*[x for x in df.columns if contains in x])
 
     if regex is not None:
-        df = df.drop(
-            * [x for x in df.columns if re.search(regex, x)]
-        )
+        df = df.drop(*[x for x in df.columns if re.search(regex, x)])
 
     if subset is not None:
         if not isinstance(subset, list):
@@ -303,10 +316,11 @@ def drop_columns(df, subset=None, startswith=None, endswith=None, contains=None,
 
     return df
 
+
 ###############################################################################
 
 
-def concat(df, out_col, sep=' ', columns=[]):
+def concat(df, out_col, sep=" ", columns=[]):
     """
     Concatenates strings from specified columns into a single string and stores
     the new string value in a new column.
@@ -366,28 +380,32 @@ def concat(df, out_col, sep=' ', columns=[]):
 
     """
 
-    df = (df
-          .withColumn(out_col,
-                      F.concat_ws(sep, *[F.col(x) for x in columns]))
-          )
+    df = df.withColumn(out_col, F.concat_ws(sep, *[F.col(x) for x in columns]))
 
-    if sep != '':
-
-        df = (df
-              .withColumn(out_col, F.regexp_replace(F.col(out_col),
-                                                    f"[{sep}]+", sep))
-              .withColumn(out_col, F.regexp_replace(F.col(out_col),
-                                                    f"^[{sep}]|[{sep}]$", ''))
-              .withColumn(out_col, F.when(F.col(out_col).rlike("^$"), None)
-                          .otherwise(F.col(out_col)))
-              )
+    if sep != "":
+        df = (
+            df.withColumn(
+                out_col, F.regexp_replace(F.col(out_col), f"[{sep}]+", sep)
+            )
+            .withColumn(
+                out_col,
+                F.regexp_replace(F.col(out_col), f"^[{sep}]|[{sep}]$", ""),
+            )
+            .withColumn(
+                out_col,
+                F.when(F.col(out_col).rlike("^$"), None).otherwise(
+                    F.col(out_col)
+                ),
+            )
+        )
 
     return df
+
 
 #############################################################################
 
 
-def explode(df, column, on=' ', retain=False, drop_duplicates=True, flag=None):
+def explode(df, column, on=" ", retain=False, drop_duplicates=True, flag=None):
     """
     Splits a string column on specified separator (default=" ")
     and creates a new row for each element of the split string array
@@ -480,39 +498,43 @@ def explode(df, column, on=' ', retain=False, drop_duplicates=True, flag=None):
     """
 
     if retain is False:
-
-        df = (df
-              .where(F.col(column).rlike(on))
-              .select(*[x for x in df.columns if x != column],
-                      F.explode(F.split(F.col(column), on))
-                      .alias(column))
-              .unionByName((df
-                           .where(~(F.col(column).rlike(on))
-                                  | (F.col(column).rlike(on).isNull()))))
-              )
+        df = (
+            df.where(F.col(column).rlike(on))
+            .select(
+                *[x for x in df.columns if x != column],
+                F.explode(F.split(F.col(column), on)).alias(column),
+            )
+            .unionByName(
+                (
+                    df.where(
+                        ~(F.col(column).rlike(on))
+                        | (F.col(column).rlike(on).isNull())
+                    )
+                )
+            )
+        )
 
     if retain is True:
-
         if flag is None:
-
-            df = (df
-                  .where(F.col(column).rlike(on))
-                  .select(*[x for x in df.columns if x != column],
-                          F.explode(F.split(F.col(column), on))
-                          .alias(column))
-                  .unionByName(df)
-                  )
+            df = (
+                df.where(F.col(column).rlike(on))
+                .select(
+                    *[x for x in df.columns if x != column],
+                    F.explode(F.split(F.col(column), on)).alias(column),
+                )
+                .unionByName(df)
+            )
 
         else:
-
-            df = (df
-                  .where(F.col(column).rlike(on))
-                  .withColumn(flag, F.lit(True))
-                  .select(*[x for x in df.columns + [flag] if x != column],
-                          F.explode(F.split(F.col(column), on))
-                          .alias(column))
-                  .unionByName(df.withColumn(flag, F.lit(False)))
-                  )
+            df = (
+                df.where(F.col(column).rlike(on))
+                .withColumn(flag, F.lit(True))
+                .select(
+                    *[x for x in df.columns + [flag] if x != column],
+                    F.explode(F.split(F.col(column), on)).alias(column),
+                )
+                .unionByName(df.withColumn(flag, F.lit(False)))
+            )
 
     if drop_duplicates is True:
         df = df.dropDuplicates()
@@ -521,6 +543,7 @@ def explode(df, column, on=' ', retain=False, drop_duplicates=True, flag=None):
 
 
 #############################################################################
+
 
 def rename_columns(df, rename_dict):
     """
@@ -577,6 +600,7 @@ def rename_columns(df, rename_dict):
         df = df.withColumnRenamed(before, after)
 
     return df
+
 
 #############################################################################
 
@@ -663,6 +687,7 @@ def prefix_columns(df, prefix, exclude=None):
 
     return df
 
+
 #############################################################################
 
 
@@ -745,6 +770,7 @@ def suffix_columns(df, suffix, exclude):
 
     return df
 
+
 #############################################################################
 
 
@@ -821,22 +847,17 @@ def union_all(*dfs, fill=None):
     if len(dfs) == 1:
         return dfs[0]
 
-    columns = list({x for y in
-                    [df.columns for df in dfs]
-                    for x in y})
+    columns = list({x for y in [df.columns for df in dfs] for x in y})
 
     out = dfs[0]
 
-    add_columns = [x for x in columns
-                   if x not in out.columns]
+    add_columns = [x for x in columns if x not in out.columns]
 
     for col in add_columns:
         out = out.withColumn(col, F.lit(fill))
 
     for df in dfs[1:]:
-
-        add_columns = [x for x in columns
-                       if x not in df.columns]
+        add_columns = [x for x in columns if x not in df.columns]
 
         for col in add_columns:
             df = df.withColumn(col, F.lit(fill))
@@ -844,6 +865,7 @@ def union_all(*dfs, fill=None):
         out = out.unionByName(df)
 
     return out
+
 
 #############################################################################
 
@@ -901,16 +923,16 @@ def drop_nulls(df, subset=None, val=None):
     """
 
     if subset is not None:
-
         if not isinstance(subset, list):
             subset = [subset]
 
     if val is not None:
         df = df.replace(val, value=None, subset=subset)
 
-    df = df.dropna(how='any', subset=subset)
+    df = df.dropna(how="any", subset=subset)
 
     return df
+
 
 ###############################################################################
 
@@ -1067,255 +1089,188 @@ def window(df, window, target, mode, alias=None, drop_na=False):
 
     window_spec = Window.partitionBy(window)
 
-    if mode == 'count':
-
+    if mode == "count":
         if alias is not None:
-
-            df = (df
-                  .select(*df.columns,
-                          F.count(target)
-                          .over(window_spec)
-                          .alias(alias))
-                  )
+            df = df.select(
+                *df.columns, F.count(target).over(window_spec).alias(alias)
+            )
 
         else:
-            df = (df
-                  .select(*df.columns,
-                          F.count(target)
-                          .over(window_spec))
-                  )
+            df = df.select(*df.columns, F.count(target).over(window_spec))
 
-    if mode == 'countDistinct':
-
+    if mode == "countDistinct":
         df = df.fillna("<<<>>>", subset=window)
 
         if alias is not None:
             if drop_na is True:
-                df = (df
-                      .dropDuplicates(subset=window + [target])
-                      .dropna(subset=[target])
-                      .select(*window + [target],
-                              F.count(target)
-                              .over(window_spec)
-                              .alias(alias))
-                      .drop(target)
-                      .dropDuplicates()
-                      ).join(df,
-                             on=window,
-                             how='right')
+                df = (
+                    df.dropDuplicates(subset=window + [target])
+                    .dropna(subset=[target])
+                    .select(
+                        *window + [target],
+                        F.count(target).over(window_spec).alias(alias),
+                    )
+                    .drop(target)
+                    .dropDuplicates()
+                ).join(df, on=window, how="right")
             else:
-                df = (df
-                      .dropDuplicates(subset=window + [target])
-                      .select(*window + [target],
-                              F.count(target)
-                              .over(window_spec)
-                              .alias(alias))
-                      .drop(target)
-                      .dropDuplicates()
-                      ).join(df,
-                             on=window,
-                             how='right')
+                df = (
+                    df.dropDuplicates(subset=window + [target])
+                    .select(
+                        *window + [target],
+                        F.count(target).over(window_spec).alias(alias),
+                    )
+                    .drop(target)
+                    .dropDuplicates()
+                ).join(df, on=window, how="right")
 
         else:
             if drop_na is True:
-                df = (df
-                      .dropDuplicates(subset=window + [target])
-                      .dropna(subset=[target])
-                      .select(*window + [target],
-                              F.count(target)
-                              .over(window_spec))
-                      .drop(target)
-                      .dropDuplicates()
-                      ).join(df,
-                             on=window,
-                             how='right')
+                df = (
+                    df.dropDuplicates(subset=window + [target])
+                    .dropna(subset=[target])
+                    .select(
+                        *window + [target], F.count(target).over(window_spec)
+                    )
+                    .drop(target)
+                    .dropDuplicates()
+                ).join(df, on=window, how="right")
             else:
-                df = (df
-                      .dropDuplicates(subset=window + [target])
-                      .select(*window + [target],
-                              F.count(target)
-                              .over(window_spec))
-                      .drop(target)
-                      .dropDuplicates()
-                      ).join(df,
-                             on=window,
-                             how='right')
+                df = (
+                    df.dropDuplicates(subset=window + [target])
+                    .select(
+                        *window + [target], F.count(target).over(window_spec)
+                    )
+                    .drop(target)
+                    .dropDuplicates()
+                ).join(df, on=window, how="right")
 
-    if mode == 'min':
+    if mode == "min":
         if alias is not None:
+            df_1 = df.dropna(subset=target).select(
+                *df.columns, F.min(target).over(window_spec).alias(alias)
+            )
 
-            df_1 = (df
-                    .dropna(subset=target)
-                    .select(*df.columns,
-                            F.min(target)
-                            .over(window_spec)
-                            .alias(alias))
-                    )
+            df_2 = df.where(
+                (F.col(target).isNull()) | F.isnan(F.col(target))
+            ).join(df_1.select(window), on=window, how="left_anti")
 
-            df_2 = (df
-                    .where((F.col(target).isNull())
-                           | F.isnan(F.col(target)))
-                    .join(df_1.select(window),
-                          on=window,
-                          how='left_anti')
-                    )
-
-            df = (union_all(df_1, df_2)
-                  .select(window + [alias])
-                  .dropDuplicates()
-                  .join(df,
-                        on=window,
-                        how='right')
-                  )
+            df = (
+                union_all(df_1, df_2)
+                .select(window + [alias])
+                .dropDuplicates()
+                .join(df, on=window, how="right")
+            )
 
         else:
-            df_1 = (df
-                    .dropna(subset=target)
-                    .select(*df.columns,
-                            F.min(target)
-                            .over(window_spec))
-                    )
+            df_1 = df.dropna(subset=target).select(
+                *df.columns, F.min(target).over(window_spec)
+            )
 
-            df_2 = (df
-                    .where((F.col(target).isNull())
-                           | F.isnan(F.col(target)))
-                    .join(df_1.select(window),
-                          on=window,
-                          how='left_anti')
-                    )
+            df_2 = df.where(
+                (F.col(target).isNull()) | F.isnan(F.col(target))
+            ).join(df_1.select(window), on=window, how="left_anti")
 
-            df = (union_all(df_1, df_2)
-                  .drop(*[x for x in df.columns
-                        if x not in window])
-                  .dropDuplicates()
-                  .join(df,
-                        on=window,
-                        how='right')
-                  )
+            df = (
+                union_all(df_1, df_2)
+                .drop(*[x for x in df.columns if x not in window])
+                .dropDuplicates()
+                .join(df, on=window, how="right")
+            )
 
-    if mode == 'max':
+    if mode == "max":
         if alias is not None:
+            df_1 = (
+                df.dropna(subset=target)
+                .select(
+                    *df.columns, F.max(target).over(window_spec).alias(alias)
+                )
+                .select(window + [alias])
+            )
 
-            df_1 = (df
-                    .dropna(subset=target)
-                    .select(*df.columns,
-                            F.max(target)
-                            .over(window_spec)
-                            .alias(alias))
-                    .select(window + [alias])
-                    )
+            df_2 = (
+                df.where((F.col(target).isNull()) | F.isnan(F.col(target)))
+                .join(df_1.select(window), on=window, how="left_anti")
+                .select(window)
+            )
 
-            df_2 = (df
-                    .where((F.col(target).isNull())
-                           | F.isnan(F.col(target)))
-                    .join(df_1.select(window),
-                          on=window,
-                          how='left_anti')
-                    .select(window)
-                    )
-
-            df = (union_all(df_1, df_2)
-                  .select(window + [alias])
-                  .dropDuplicates()
-                  .join(df,
-                        on=window,
-                        how='right')
-                  )
+            df = (
+                union_all(df_1, df_2)
+                .select(window + [alias])
+                .dropDuplicates()
+                .join(df, on=window, how="right")
+            )
 
         else:
-
             # needs alternative to selecting alias
 
-            drop = [x for x in df.columns
-                    if x not in window]
+            drop = [x for x in df.columns if x not in window]
 
-            df_1 = (df
-                    .dropna(subset=target)
-                    .select(*df.columns,
-                            F.max(target)
-                            .over(window_spec))
-                    .drop(*drop)
-                    )
+            df_1 = (
+                df.dropna(subset=target)
+                .select(*df.columns, F.max(target).over(window_spec))
+                .drop(*drop)
+            )
 
-            df_2 = (df
-                    .where((F.col(target).isNull())
-                           | F.isnan(F.col(target)))
-                    .join(df_1.select(window),
-                          on=window,
-                          how='left_anti')
-                    .select(window)
-                    )
+            df_2 = (
+                df.where((F.col(target).isNull()) | F.isnan(F.col(target)))
+                .join(df_1.select(window), on=window, how="left_anti")
+                .select(window)
+            )
 
-            df = (union_all(df_1, df_2)
-                  .drop(*[x for x in df.columns
-                        if x not in window])
-                  .dropDuplicates()
-                  .join(df,
-                        on=window,
-                        how='right')
-                  )
+            df = (
+                union_all(df_1, df_2)
+                .drop(*[x for x in df.columns if x not in window])
+                .dropDuplicates()
+                .join(df, on=window, how="right")
+            )
 
-    if mode == 'sum':
+    if mode == "sum":
         if alias is not None:
+            df_1 = (
+                df.dropna(subset=target)
+                .select(
+                    *df.columns, F.sum(target).over(window_spec).alias(alias)
+                )
+                .select(window + [alias])
+            )
 
-            df_1 = (df
-                    .dropna(subset=target)
-                    .select(*df.columns,
-                            F.sum(target)
-                            .over(window_spec)
-                            .alias(alias))
-                    .select(window + [alias])
-                    )
+            df_2 = (
+                df.where((F.col(target).isNull()) | F.isnan(F.col(target)))
+                .join(df_1.select(window), on=window, how="left_anti")
+                .select(window)
+            )
 
-            df_2 = (df
-                    .where((F.col(target).isNull())
-                           | F.isnan(F.col(target)))
-                    .join(df_1.select(window),
-                          on=window,
-                          how='left_anti')
-                    .select(window)
-                    )
-
-            df = (union_all(df_1, df_2)
-                  .select(window + [alias])
-                  .dropDuplicates()
-                  .join(df,
-                        on=window,
-                        how='right')
-                  )
+            df = (
+                union_all(df_1, df_2)
+                .select(window + [alias])
+                .dropDuplicates()
+                .join(df, on=window, how="right")
+            )
 
         else:
-
             # needs alternative to selecting alias
 
-            drop = [x for x in df.columns
-                    if x not in window]
+            drop = [x for x in df.columns if x not in window]
 
-            df_1 = (df
-                    .dropna(subset=target)
-                    .select(*df.columns,
-                            F.sum(target)
-                            .over(window_spec))
-                    .drop(*drop)
-                    )
+            df_1 = (
+                df.dropna(subset=target)
+                .select(*df.columns, F.sum(target).over(window_spec))
+                .drop(*drop)
+            )
 
-            df_2 = (df
-                    .where((F.col(target).isNull())
-                           | F.isnan(F.col(target)))
-                    .join(df_1.select(window),
-                          on=window,
-                          how='left_anti')
-                    .select(window)
-                    )
+            df_2 = (
+                df.where((F.col(target).isNull()) | F.isnan(F.col(target)))
+                .join(df_1.select(window), on=window, how="left_anti")
+                .select(window)
+            )
 
-            df = (union_all(df_1, df_2)
-                  .drop(*[x for x in df.columns
-                        if x not in window])
-                  .dropDuplicates()
-                  .join(df,
-                        on=window,
-                        how='right')
-                  )
+            df = (
+                union_all(df_1, df_2)
+                .drop(*[x for x in df.columns if x not in window])
+                .dropDuplicates()
+                .join(df, on=window, how="right")
+            )
 
     df = st.standardise_null(df, "^<<<>>>$", subset=window)
 
@@ -1444,46 +1399,36 @@ def filter_window(df, filter_window, target, mode, value=None, condition=True):
 
     w = Window.partitionBy(filter_window)
 
-    if mode in ['count', 'countDistinct']:
-
+    if mode in ["count", "countDistinct"]:
         if condition:
-
-            df = (window(df, filter_window, target, mode, alias='count')
-                  .where(F.col('count') == value)
-                  .drop('count')
-                  )
+            df = (
+                window(df, filter_window, target, mode, alias="count")
+                .where(F.col("count") == value)
+                .drop("count")
+            )
 
         else:
+            df = (
+                window(df, filter_window, target, mode, alias="count")
+                .where(F.col("count") != value)
+                .drop("count")
+            )
 
-            df = (window(df, filter_window, target, mode, alias='count')
-                  .where(F.col('count') != value)
-                  .drop('count')
-                  )
-
-    if mode in ['min', 'max']:
-
+    if mode in ["min", "max"]:
         dt_target = [dtype for name, dtype in df.dtypes if name == target][0]
-        df = window(df, filter_window, target, mode, alias='value')
-        df = st.fill_nulls(df, fill='<<<>>>', subset=['value'] + [target])
+        df = window(df, filter_window, target, mode, alias="value")
+        df = st.fill_nulls(df, fill="<<<>>>", subset=["value"] + [target])
 
         if condition:
-            df = (df
-                  .where(F.col(target) == F.col('value'))
-                  .drop('value')
-                  )
+            df = df.where(F.col(target) == F.col("value")).drop("value")
         else:
-            df = (df
-                  .where(F.col(target) != F.col('value'))
-                  .drop('value')
-                  )
+            df = df.where(F.col(target) != F.col("value")).drop("value")
 
-        df = (st.standardise_null(df=df,
-                                  replace="^<<<>>>$",
-                                  subset=target)
-              )
+        df = st.standardise_null(df=df, replace="^<<<>>>$", subset=target)
         df = df.withColumn(target, F.col(target).cast(dt_target))
 
     return df
+
 
 ###############################################################################
 
@@ -1541,6 +1486,7 @@ def literal_column(df, col_name, literal):
 
     df = df.withColumn(col_name, F.lit(literal))
     return df
+
 
 ###########################################################################
 
@@ -1612,18 +1558,18 @@ def coalesced(df, subset=None, output_col="coalesced_col", drop=False):
     if subset is None:
         subset = df.columns
 
-    df = df.withColumn(output_col,
-                       F.coalesce(*[F.col(x) for x in subset]))
+    df = df.withColumn(output_col, F.coalesce(*[F.col(x) for x in subset]))
 
     if drop:
         df = drop_columns(df, subset=subset, drop_duplicates=False)
 
     return df
 
+
 ##############################################################################
 
 
-def split(df, col_in, col_out=None, split_on=' '):
+def split(df, col_in, col_out=None, split_on=" "):
     """
     Splits a string column to array on specified separator.
     Option to return split column as new column or to split in place.
@@ -1651,23 +1597,28 @@ def split(df, col_in, col_out=None, split_on=' '):
     """
 
     if col_out is None:
-
-        df = df.withColumn(col_in, F.when((F.col(col_in).isNull())
-                                          | (F.isnan(F.col(col_in))), None)
-                           .otherwise(F.split(F.col(col_in), split_on)))
+        df = df.withColumn(
+            col_in,
+            F.when(
+                (F.col(col_in).isNull()) | (F.isnan(F.col(col_in))), None
+            ).otherwise(F.split(F.col(col_in), split_on)),
+        )
 
     else:
-
-        df = df.withColumn(col_out, F.when((F.col(col_in).isNull())
-                                           | (F.isnan(F.col(col_in))), None)
-                           .otherwise(F.split(F.col(col_in), split_on)))
+        df = df.withColumn(
+            col_out,
+            F.when(
+                (F.col(col_in).isNull()) | (F.isnan(F.col(col_in))), None
+            ).otherwise(F.split(F.col(col_in), split_on)),
+        )
 
     return df
 
 
 ##############################################################################
 
-def index_select(df, split_col, out_col, index, sep=' '):
+
+def index_select(df, split_col, out_col, index, sep=" "):
     """
     Allows indices to be selected within a column of arrays
     and casts those values to a new column (out_col arg).
@@ -1721,33 +1672,33 @@ def index_select(df, split_col, out_col, index, sep=' '):
     """
 
     if isinstance(index, tuple):
+        for i in range(index[1])[index[0] :]:
+            df = df.withColumn(
+                f"index_select_{i}", F.col(split_col).getItem(i)
+            )
 
-        for i in range(index[1])[index[0]:]:
+        df = concat(
+            df,
+            out_col,
+            sep,
+            [f"index_select_{i}" for i in range(index[1])[index[0] :]],
+        )
 
-            df = df.withColumn(f'index_select_{i}', F.col(split_col)
-                               .getItem(i))
-
-        df = concat(df, out_col, sep,
-                    [f'index_select_{i}'
-                     for i in range(index[1])[index[0]:]])
-
-        df = df.drop(*[f'index_select_{i}'
-                     for i in range(index[1])[index[0]:]])
+        df = df.drop(
+            *[f"index_select_{i}" for i in range(index[1])[index[0] :]]
+        )
 
     else:
-
         if index >= 0:
-
-            df = (df.
-                  withColumn(out_col, F.col(split_col)
-                             .getItem(index)))
+            df = df.withColumn(out_col, F.col(split_col).getItem(index))
 
         if index < 0:
-            df = (df
-                  .withColumn(out_col, F.reverse(F.col(split_col))
-                              .getItem(abs(index) - 1)))
+            df = df.withColumn(
+                out_col, F.reverse(F.col(split_col)).getItem(abs(index) - 1)
+            )
 
     return df
+
 
 #############################################################################
 
@@ -1808,11 +1759,11 @@ def clone_column(df, target, clone):
 
     return df
 
+
 ############################################################
 
 
-def substring(df, out_col, target_col,
-              start, length, from_end=False):
+def substring(df, out_col, target_col, start, length, from_end=False):
     """
     Creates a new column containing substring values
     from another column.
@@ -1891,26 +1842,22 @@ def substring(df, out_col, target_col,
     """
 
     if from_end is False:
-
-        df = (df
-              .withColumn(out_col,
-                          F.substring(F.col(target_col),
-                                      start, length))
-              )
+        df = df.withColumn(
+            out_col, F.substring(F.col(target_col), start, length)
+        )
 
     if from_end is True:
-
-        df = (df
-              .withColumn(target_col,
-                          F.reverse(F.col(target_col)))
-              .withColumn(out_col,
-                          F.reverse(F.substring(F.col(target_col),
-                                                start, length)))
-              .withColumn(target_col,
-                          F.reverse(F.col(target_col)))
-              )
+        df = (
+            df.withColumn(target_col, F.reverse(F.col(target_col)))
+            .withColumn(
+                out_col,
+                F.reverse(F.substring(F.col(target_col), start, length)),
+            )
+            .withColumn(target_col, F.reverse(F.col(target_col)))
+        )
 
     return df
+
 
 ################################################################################
 
@@ -1967,21 +1914,29 @@ def cut_off(df, threshold_column, val, mode):
     +---+---+
 
     """
-    if mode == '>=':
+    if mode == ">=":
         df = df.where(F.col(threshold_column) >= val)
-    elif mode == '>':
+    elif mode == ">":
         df = df.where(F.col(threshold_column) > val)
-    elif mode == '<':
+    elif mode == "<":
         df = df.where(F.col(threshold_column) < val)
-    elif mode == '<=':
+    elif mode == "<=":
         df = df.where(F.col(threshold_column) <= val)
     return df
+
 
 ###############################################################################
 
 
-def date_diff(df, col_name1, col_name2, diff='Difference',
-              in_date_format='dd-MM-yyyy', units='days', absolute=True):
+def date_diff(
+    df,
+    col_name1,
+    col_name2,
+    diff="Difference",
+    in_date_format="dd-MM-yyyy",
+    units="days",
+    absolute=True,
+):
     """
     date_diff finds the number of days/months/years between two date columns
     by subtracting the dates in the second column from the dates in the first.
@@ -2060,17 +2015,20 @@ def date_diff(df, col_name1, col_name2, diff='Difference',
 
     """
 
-    df = df.withColumn(diff, F.unix_timestamp(F.col(col_name1), in_date_format)
-                       - F.unix_timestamp(F.col(col_name2), in_date_format))
+    df = df.withColumn(
+        diff,
+        F.unix_timestamp(F.col(col_name1), in_date_format)
+        - F.unix_timestamp(F.col(col_name2), in_date_format),
+    )
 
-    if units == 'days':
+    if units == "days":
         df = df.withColumn(diff, (F.col(diff) / 86400))
         df = df.withColumn(diff, F.round(diff, 2))
-    elif units == 'months':
+    elif units == "months":
         # months value is slightly inaccurate as it assumes every month is a 31 day month
         df = df.withColumn(diff, F.col(diff) / (31 * 86400))
         df = df.withColumn(diff, F.round(diff, 2))
-    elif units == 'years':
+    elif units == "years":
         df = df.withColumn(diff, F.col(diff) / (86400 * 365))
         df = df.withColumn(diff, F.round(diff, 2))
     if absolute is True:
