@@ -31,3 +31,21 @@ Repository = "https://github.com/jack-linaker/dlh-utils"
 [build-system]
 requires = ["uv_build>=0.9.26,<0.10.0"]
 build-backend = "uv_build"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["COM812"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = [
+    "INP001", # pytest does not require an __init__.py
+    "S101",   # pytest uses assert
+]
+"scripts/*.py" = ["INP001"] # scripts aren't part of package
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.pytest]
+addopts = ["--cov-report=term-missing:skip-covered", "--cov=src"]
+testpaths = ["tests"]
