@@ -1,13 +1,25 @@
-'''setting package module imports'''
-import dlh_utils.dataframes
-import dlh_utils.flags
-import dlh_utils.linkage
-import dlh_utils.profiling
-import dlh_utils.sessions
-import dlh_utils.standardisation
-import dlh_utils.utilities
-from dlh_utils._version import __version__
+"""Setting package module imports."""
+
+from importlib.metadata import version
+
+from dlh_utils import (
+    dataframes,
+    flags,
+    linkage,
+    profiling,
+    sessions,
+    standardisation,
+    utilities,
+)
+
+__version__ = version("dlh_utils")
 
 __all__ = [
-    "dataframes", "flags", "linkage", "profiling", "sessions", "standardisation", "utilities"
+    "dataframes",
+    "flags",
+    "linkage",
+    "profiling",
+    "sessions",
+    "standardisation",
+    "utilities",
 ]
