@@ -5,7 +5,6 @@ from typing import Any, Literal
 
 import pyspark.sql.functions as F
 from pyspark.sql import DataFrame, Window
-from pyspark.sql.types import DateType, TimestampType
 
 from dlh_utils import standardisation as st
 
@@ -419,8 +418,8 @@ def explode(
     +---+--------+-----------+-------+----------+---+--------+----------------------+
     |1  |Homer   |Jay        |Simpson|1983-05-12|M  |ET74 2SP|Balding Lazy          |
     |2  |Marge   |Juliet     |Simpson|1983-03-19|F  |ET74 2SP|Blue-hair Kind-hearted|
-    |3  |Bart    |Jo-Jo      |Simpson|2012-04-01|M  |ET74 2SP|Spikey-hair Rebellious|
-    |3  |Bart    |Jo-Jo      |Simpson|2012-04-01|M  |ET74 2SP|Spikey-hair Rebellious|
+    |3  |Bart    |Jo-Jo      |Simpson|2012-04-01|M  |ET74 2SP|Spiky-hair Rebellious |
+    |3  |Bart    |Jo-Jo      |Simpson|2012-04-01|M  |ET74 2SP|Spiky-hair Rebellious |
     |4  |Lisa    |Marie      |Simpson|2014-05-09|F  |ET74 2SP|Red-dress Smart       |
     |5  |Maggie  |null       |Simpson|2021-01-12|F  |ET74 2SP|Star-hair Mute        |
     +---+--------+-----------+-------+----------+---+--------+----------------------+
@@ -439,7 +438,7 @@ def explode(
     +---+--------+-----------+-------+----------+---+--------+------------+
     | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode| Description|
     +---+--------+-----------+-------+----------+---+--------+------------+
-    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP| Spikey-hair|
+    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP| Spiky-hair |
     |  1|   Homer|        Jay|Simpson|1983-05-12|  M|ET74 2SP|     Balding|
     |  4|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|       Smart|
     |  5|  Maggie|       null|Simpson|2021-01-12|  F|ET74 2SP|   Star-hair|
@@ -464,7 +463,7 @@ def explode(
     +---+--------+-----------+-------+----------+---+--------+----------------------+
     |ID |Forename|Middle_name|Surname|DoB       |Sex|Postcode|Description           |
     +---+--------+-----------+-------+----------+---+--------+----------------------+
-    |3  |Bart    |Jo-Jo      |Simpson|2012-04-01|M  |ET74 2SP|Spikey-hair           |
+    |3  |Bart    |Jo-Jo      |Simpson|2012-04-01|M  |ET74 2SP|Spiky-hair            |
     |1  |Homer   |Jay        |Simpson|1983-05-12|M  |ET74 2SP|Balding               |
     |4  |Lisa    |Marie      |Simpson|2014-05-09|F  |ET74 2SP|Smart                 |
     |5  |Maggie  |null       |Simpson|2021-01-12|F  |ET74 2SP|Star-hair             |
@@ -473,7 +472,7 @@ def explode(
     |2  |Marge   |Juliet     |Simpson|1983-03-19|F  |ET74 2SP|Blue-hair             |
     |1  |Homer   |Jay        |Simpson|1983-05-12|M  |ET74 2SP|Balding Lazy          |
     |2  |Marge   |Juliet     |Simpson|1983-03-19|F  |ET74 2SP|Kind-hearted          |
-    |3  |Bart    |Jo-Jo      |Simpson|2012-04-01|M  |ET74 2SP|Spikey-hair Rebellious|
+    |3  |Bart    |Jo-Jo      |Simpson|2012-04-01|M  |ET74 2SP|Spiky-hair Rebellious |
     |5  |Maggie  |null       |Simpson|2021-01-12|F  |ET74 2SP|Star-hair Mute        |
     |5  |Maggie  |null       |Simpson|2021-01-12|F  |ET74 2SP|Mute                  |
     |1  |Homer   |Jay        |Simpson|1983-05-12|M  |ET74 2SP|Lazy                  |
@@ -866,6 +865,7 @@ def window(
     target: str,
     mode: Literal["count", "countDistinct", "max", "min", "sum"],
     alias: str | None = None,
+    *,
     drop_na: bool = False,
 ) -> DataFrame:
     """Add a column for a given ``mode`` over a given ``window``.
@@ -1198,6 +1198,7 @@ def filter_window(
     target: str,
     mode: Literal["count", "countDistinct"],
     value: int | None = None,
+    *,
     condition: bool = True,
 ) -> DataFrame:
     """Perform operation on collection of rows.
@@ -1404,6 +1405,7 @@ def coalesced(
     df: DataFrame,
     subset: list[str] | None = None,
     output_col: str = "coalesced_col",
+    *,
     drop: bool = False,
 ) -> DataFrame:
     """Add column with each row's first non-null value.
@@ -1648,6 +1650,7 @@ def substring(
     target_col: str,
     start: int,
     length: int,
+    *,
     from_end: bool = False,
 ) -> DataFrame:
     """Create new column extracting substring from another column.
@@ -1805,6 +1808,7 @@ def date_diff(
     diff: str = "Difference",
     in_date_format: str = "dd-MM-yyyy",
     units: Literal["days", "months", "years"] = "days",
+    *,
     absolute: bool = True,
 ) -> DataFrame:
     """Compute days/months/years difference between two date columns.
