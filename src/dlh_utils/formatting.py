@@ -6,9 +6,12 @@ These wrap up some commonly-needed Pandas Styler and openpyxl boilerplate code.
 
 import os
 import subprocess
+from collections.abc import Callable
+from typing import Any
 
 import openpyxl
 import pandas as pd
+from pandas.io.formats.style import Styler
 from pyspark.sql import DataFrame
 
 
@@ -78,10 +81,10 @@ def export_to_excel(
     ... )
 
     This next example shows a single DataFrame with complex styling:
-      - bank_balance is given a background colour gradient.
-      - income_change is given red/green text colours for
-        negative/positive.
-      - age is formatted in bold if the person is a child.
+        - bank_balance is given a background colour gradient.
+        - income_change is given red/green text colours for
+          negative/positive.
+        - age is formatted in bold if the person is a child.
 
     Note the use of ``partial`` to set values for the parameters when we
     don't want to use their default values.
@@ -162,35 +165,30 @@ def export_to_excel(
     return wb
 
 
-#########################################################
-
-
 def copy_local_file_to_hdfs(
-    local_path, hdfs_path, local_filename=None, hdfs_filename=None
-):
-    """
-    Copies a file created locally (i.e. in CDSW) to HDFS.
+    local_path: str,
+    hdfs_path: str,
+    local_filename: str | None = None,
+    hdfs_filename: str | None = None,
+) -> None:
+    """Copy a file created locally (ie in CDSW) to HDFS.
 
     Parameters
     ----------
+    local_path : str
+        Path to the local file to be copied.
+    hdfs_path : str
+        Target path to copy to.
+    local_filename : str, optional
+        If not specified, the local_path is assumed to include the
+        filename. Defaults to None.
+    hdfs_filename : str, optional
+        If not specified, the hdfs_path is assumed to include the
+        filename. Defaults to None.
 
-    local_path: string
-      Path to the local file to be copied
-    hdfs_path: string
-      Target path to copy to
-    local_filename: string, default=None
-      If not specified, the local_path is assumed to include the filename
-    hdfs_filename: string, default=None
-      If not specified, the hdfs_path is assumed to include the filename
-
-    Returns
-    -------
-    None
-
-    Example
-    -------
-
-    > copy_local_file_to_hdfs('/tmp/wb.xlsx', '/hdfs/folder/xlsx)
+    Examples
+    --------
+    >>> copy_local_file_to_hdfs("/tmp/wb.xlsx", "/hdfs/folder/xlsx")
     """
     if local_filename is not None:
         local_path = os.path.join(local_path, local_filename)
@@ -205,13 +203,13 @@ def copy_local_file_to_hdfs(
     stdout, stderr = process.communicate()
 
 
-###############################################################################
+def apply_styles(
+    df: pd.DataFrame | DataFrame, styles: dict[Callable[[Any], Any], str | list[str]]
+) -> Styler:
+    """Apply custom styles and return pandas Styler.
 
-
-def apply_styles(df, styles):
-    """
-    Applies a set of custom style functions to a dataframe and returns
-    a pandas Styler object, which can be displayed by Jupyter and saved
+    Applies a set of custom style functions to a DataFrame and returns a
+    pandas Styler object, which can be displayed by Jupyter and saved
     into Excel or HTML.
 
     Some suitable functions are included in this module with the prefix
@@ -221,62 +219,51 @@ def apply_styles(df, styles):
 
     Parameters
     ----------
-    df : Pandas dataframe
-      The dataframe to be styled.
-      If a pyspark dataframe is provided it will be converted to Pandas.
-    styles : dict
-      A dictionary whose keys are functions and whose values are lists
-      of column names. Each function should take in a single value and
-      return a valid CSS string. The value can be a single column name
-      (as a string) or a list
+    df : pandas.DataFrame | pyspark.sql.DataFrame
+        The DataFrame to be styled. If a PySpark DataFrame is provided
+        it will be converted to Pandas.
+    styles : dict[Callable, str | list[str]]
+        A dictionary whose keys are functions and whose values are lists
+        of column names. Each function should take in a single value and
+        return a valid CSS string. The value can be a single column name
+        (as a string) or a list
 
     Returns
     -------
-    A pandas Styler object.
+    pandas.io.formats.style.Styler
 
-    Example
-    -------
+    Examples
+    --------
+    The DataFrame df has a column, "Number", that can be positive or
+    negative. We apply the default style to a column of this type using
+    a style_ function defined in this module:
 
-    The DataFrame df has a column, "Number", that can be positive or negative.
-    We apply the default style to a column of this type using a style_ function
-    defined in this module:
+    >>> apply_styles(df, {style_on_cutoff: "Number"})
 
-    > apply_styles(
-        df,
-        {
-          style_on_cutoff: "Number"
-        }
-      )
+    We would like to highlight in bold when a value is NA in two
+    columns, "Number" and "OtherNumber". Both style rules will be
+    applied to the "Number" column but only the bold style to
+    "OtherNumber". Again, we use a style_ function defined in this
+    module:
 
-    We would like to highlight in bold when a value is NA in two columns,
-    "Number" and "OtherNumber". Both style rules will be applied to the "Number"
-    column but only the bold style to "OtherNumber". Again, we use a style_
-    function defined in this module:
-    > apply_styles(
-        df,
-        {
-          style_on_cutoff: "Number",
-          style_on_condition: ["Number", "OtherNumber"]
-        }
-      )
+    >>> apply_styles(
+    ...     df,
+    ...     {style_on_cutoff: "Number", style_on_condition: ["Number", "OtherNumber"]},
+    ... )
 
-    The style_ functions have default behaviours we may want to customize. To
-    do this, use the following pattern. The partial() function is defined in
-    functools (part of python's standard library) and allows us to "freeze" some
-    parameters of a function before it's evaluated:
-    > from functools import partial
-    > apply_styles(
-        df,
-        {
-          partial(style_fill_pos_neg, property='color'): "Number"
-        }
-      )
+    The style_ functions have default behaviours we may want to
+    customize. To do this, use the following pattern. The partial()
+    function is defined in functools (part of python's standard library)
+    and allows us to "freeze" some parameters of a function before it's
+    evaluated:
+
+    >>> from functools import partial
+    >>> apply_styles(df, {partial(style_fill_pos_neg, property='color'): "Number"})
     """
-
     if not isinstance(df, pd.DataFrame):
         df = df.toPandas()
 
-    styles_by_column = {c: [] for c in df.columns}
+    styles_by_column: dict[str, list[str]] = {c: [] for c in df.columns}
     for s in styles:
         cols = styles[s]
         if not isinstance(cols, list):
@@ -292,57 +279,64 @@ def apply_styles(df, styles):
     return sdf
 
 
-###############################################################################
-
-
 def style_on_cutoff(
-    value,
-    cutoff=0,
-    negative_style="red",
-    positive_style="green",
-    zero_style="white",
-    error_style="black",
-    property="background-color",
-):
-    """
-    Returns a CSS string that sets the specified property to the appropriate style
-    for the value passed in. The style is chosen based on whether the value is
-    greater than, equal to or less than the cutoff.
+    value: Any,
+    cutoff: Any = 0,
+    negative_style: str = "red",
+    positive_style: str = "green",
+    zero_style: str = "white",
+    error_style: str | None = "black",
+    property: str = "background-color",
+) -> str:
+    """Return CSS style string based on value compared to cutoff.
 
-    By default the cutoff is 0 and the function assigns background colours:
-    green for positive, red for negative and white for exactly zero.
+    Returns a CSS string that sets the specified property to the
+    appropriate style for the value passed in. The style is chosen based
+    on whether the value is greater than, equal to or less than the
+    cutoff.
 
-    You can also set a style for if the attempt to calculate a result led to an
-    exception or if value < cutoff, value > cutoff and value == cutoff all
-    evaluate to False.
+    By default the cutoff is 0 and the function assigns background
+    colours: green for positive, red for negative and white for exactly
+    zero.
 
-    This function is intended to be used with apply_styles() (defined in this module).
+    You can also set a style for if the attempt to calculate a result
+    led to an exception or if value < cutoff, value > cutoff and value
+    == cutoff all evaluate to False.
+
+    This function is intended to be used with apply_styles() (defined in
+    this module).
 
     Parameters
     ----------
-
     value : numeric or other appropriate type
-      A value of any type that can be compared with cutoff using "<" and ">".
-    cutoff : any type comparable to value
-      The passed-in value will be compared to cutoff to determine which style is returned.
-    negative_style : string, default="red"
-      The colour name, RGB code or other style value to be assigned when value < cutoff.
-    positive_style : string, default="green"
-      The colour name, RGB code or other style value to be assigned when value > cutoff.
-    zero_style : string, default="white"
-      The colour name, RGB code or other style value to be assigned when neither
-      value < cutoff nor value > cutoff.
-    error_style : string, default="black"
-     The colour name, RGB code or other style value to be assigned when an error occurs.
-     This can happen when the value is NaN or not of the expected type.
-     If error_style=None, the exception will be re-raised instead. If in doubt, pass in
-     None and make sure any errors that are raised are expected.
-    property : string, default="background-color"
-      The CSS property the colour will be applied to.
+        A value of any type that can be compared with cutoff using "<"
+        and ">".
+    cutoff : any type comparable to value, optional
+        The passed-in value will be compared to cutoff to determine
+        which style is returned. Defaults to 0.
+    negative_style : str, optional
+        The colour name, RGB code or other style value to be assigned
+        when value < cutoff. Defaults to "red".
+    positive_style : str, optional
+        The colour name, RGB code or other style value to be assigned
+        when value > cutoff. Defaults to "green".
+    zero_style : str, optional
+        The colour name, RGB code or other style value to be assigned
+        when neither value < cutoff nor value > cutoff. Defaults to
+        "white".
+    error_style : str, optional
+       The colour name, RGB code or other style value to be assigned
+       when an error occurs. This can happen when the value is NaN or
+       not of the expected type. If error_style=None, the exception will
+       be re-raised instead. If in doubt, pass in None and make sure any
+       errors that are raised are expected. Defaults to "black".
+    property : str, optional
+        The CSS property the colour will be applied to. Defaults to
+        "background-color".
 
     Returns
     -------
-    String
+    str
     """
     try:
         if value < cutoff:
@@ -364,45 +358,49 @@ def style_on_cutoff(
         return property + " : " + error_style + ";"
 
 
-###############################################################################
-
-
 def style_on_condition(
     value,
-    property="font-weight",
-    true_style="bold",
-    false_style="normal",
-    error_style=None,
+    property: str = "font-weight",
+    true_style: str = "bold",
+    false_style: str = "normal",
+    error_style: str | None = None,
     condition=lambda x: x == 0,
-):
-    """
-    Returns a CSS string that sets the specified property to the appropriate style
-    for the value passed in.
+) -> str:
+    """Return CSS style string based on a condition applied to a value.
 
-    This function is intended to be used with apply_styles() (defined in this module).
+    Returns a CSS string that sets the specified property to the
+    appropriate style for the value passed in.
+
+    This function is intended to be used with apply_styles() (defined in
+    this module).
 
     Parameters
     ----------
-
     value : any appropriate type
-      A value of a type that can be accepted by the condition function.
-    property : string, default="font-weight"
-      The CSS property the style will be applied to.
-    true_style : string, default="bold"
-      The style will be assigned when the condition evaluates true on the value.
-    false_style : string, default="normal"
-      The style will be assigned when the condition evaluates false on the value.
-    error_style : string, default=None
-      The style will be assigned if an error occurs in this function. If None,
-      the error will be raised instead.
-    condition : function, default=lambda x : x == 0
-      A function that accepts value and returns a truthy value. This is used
-      to determine whether the current value receives true_style or false_style.
-      The default function applies true_style to values that exactly equal zero.
+        A value of a type that can be accepted by the condition
+        function.
+    property : str, optional
+        The CSS property the style will be applied to. Defaults to
+        "font-weight".
+    true_style : str, optional
+        The style will be assigned when the condition evaluates true on
+        the value. Defaults to "bold".
+    false_style : str, optional
+        The style will be assigned when the condition evaluates false on
+        the value. Defaults to "normal".
+    error_style : str, optional
+        The style will be assigned if an error occurs in this function.
+        If None, the error will be raised instead. Defaults to None.
+    condition : function, optional
+        A function that accepts value and returns a truthy value. This
+        is used to determine whether the current value receives
+        true_style or false_style. The default function applies
+        true_style to values that exactly equal zero. Defaults to lambda
+        x: x == 0.
 
     Returns
     -------
-    String
+    str
     """
     try:
         if condition(value):
@@ -414,54 +412,53 @@ def style_on_condition(
         return property + " : " + error_style + ";"
 
 
-###############################################################################
-
-
 def style_colour_gradient(
     value,
     min,
     max,
-    property="background-color",
-    min_colour="#FFFFFF",
-    max_colour="#FF0000",
-    error_colour="#000000",
-):
-    """
-    Returns a CSS string that sets the specified colour property to a colour ranging
-    between start_colour and end_colour depending on the value's position in the range
-    between min and max.
+    property: str = "background-color",
+    min_colour: str = "#FFFFFF",
+    max_colour: str = "#FF0000",
+    error_colour: str | None = "#000000",
+) -> str:
+    """Map numeric value to gradient colour CSS string.
 
-    This function is intended to be used with apply_styles() (defined in this module).
+    Returns a CSS string that sets the specified colour property to a
+    colour ranging between start_colour and end_colour depending on the
+    value's position in the range between min and max.
+
+    This function is intended to be used with apply_styles() (defined in
+    this module).
 
     Parameters
     ----------
-
     value : any numeric type
-      The value to be mapped to a colour.
+        The value to be mapped to a colour.
     min : any numeric type
-      The highest value that will receive the start_colour (any lower values
-      also receive start_colour).
+        The highest value that will receive the start_colour (any lower
+        values also receive start_colour).
     max : any numeric type
-      The lowest value that will receive the end_colour (any higher values
-      also receive end_colour).
-    property : string, default="background-colour"
-      The CSS property the style will be applied to. Must be able to be set to
-      a hexadecimal colour string.
-    min_colour : string, default="#FFFFFF" (white)
-      The colour at the minimum end of the gradient. Pass only a hexadecimal string,
-      not a colour name.
-    max_colour : string, default="#FF0000" (red)
-      The colour at the maximum end of the gradient. Pass only a hexadecimal string,
-      not a colour name.
-    error_colour : string, default="#000000"
-      The colour will be assigned if an error occurs in this function. If None,
-      the error will be raised instead.
+        The lowest value that will receive the end_colour (any higher
+        values also receive end_colour).
+    property : str, optional
+        The CSS property the style will be applied to. Must be able to
+        be set to a hexadecimal colour string. Defaults to
+        "background-color".
+    min_colour : str, optional
+        The colour at the minimum end of the gradient. Pass only a
+        hexadecimal string, not a colour name. Defaults to "#FFFFFF".
+    max_colour : str, optional
+        The colour at the maximum end of the gradient. Pass only a
+        hexadecimal string, not a colour name. Defaults to "#FF0000".
+    error_colour : str, optional
+        The colour will be assigned if an error occurs in this function.
+        If None, the error will be raised instead. Defaults to
+        "#000000".
 
     Returns
     -------
-    String
+    str
     """
-
     try:
         # Extract colour channels from parameters
         min_colour = min_colour.replace("#", "")
@@ -493,48 +490,49 @@ def style_colour_gradient(
         return property + " : #" + error_colour + ";"
 
 
-###############################################################################
-
-
 def style_map_values(
     value,
-    mapping_dictionary,
-    property="background-color",
-    default_style=None,
-    error_style=None,
-):
-    """
-    Returns a CSS string that sets the specified property to a value as specified by
-    mapping_dictionary, which maps possible values being passed in to the style the
-    property should be assigned to. If the value is not found in mapping_dictionary
-    the default_value is used, if one is specified, or an error is raised. In the
-    event of an error, error_value will be used if it is not None, otherwise the
+    mapping_dictionary: dict,
+    property: str = "background-color",
+    default_style: str | None = None,
+    error_style: str | None = None,
+) -> str:
+    """Map values to CSS styles using a lookup dictionary.
+
+    Returns a CSS string that sets the specified property to a value as
+    specified by mapping_dictionary, which maps possible values being
+    passed in to the style the property should be assigned to. If the
+    value is not found in mapping_dictionary the default_value is used,
+    if one is specified, or an error is raised. In the event of an
+    error, error_value will be used if it is not None, otherwise the
     caller will receive the error.
 
-    This function is intended to be used with apply_styles() (defined in this module).
+    This function is intended to be used with apply_styles() (defined in
+    this module).
 
     Parameters
     ----------
-
     value : any appropriate type
-      A value of a type that can be accepted by the condition function.
-    mapping_dictionary : dictionary
-      Keys are possible values for the parameter "value"; these are mapped to styles.
-    property : string, default="background-colour"
-      The CSS property the style will be applied to. Must be able to be set to
-      a hexadecimal colour string.
-    default_style : string, default=None
-      If not None, this will be used if the value passed in is not found in
-      mapping_dictionary.
-    error_style : string, default=None
-      The style will be assigned if an error occurs in this function. If None,
-      the error will be raised instead.
+        A value of a type that can be accepted by the condition
+        function.
+    mapping_dictionary : dict
+        Keys are possible values for the parameter "value"; these are
+        mapped to styles.
+    property : str, optional
+        The CSS property the style will be applied to. Must be able to
+        be set to a hexadecimal colour string. Defaults to
+        "background-color".
+    default_style : str, optional
+        If not None, this will be used if the value passed in is not
+        found in mapping_dictionary. Defaults to None.
+    error_style : str, optional
+        The style will be assigned if an error occurs in this function.
+        If None, the error will be raised instead. Defaults to None.
 
     Returns
     -------
-    String
+    str
     """
-
     try:
         if value in mapping_dictionary:
             style = mapping_dictionary[value]

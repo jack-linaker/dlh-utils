@@ -1,63 +1,59 @@
-"""
-Function used to create and start different sized spark sessions, also
-generating a Spark UI link to monitor session progress.
-"""
+"""Functions used to create and start different sized spark sessions."""
 
 import os
+from typing import Literal
 
 import graphframes_jars as graphframes
 from IPython.display import HTML, display
 from pyspark.sql import SparkSession
 
-##################################################################################
-
 
 def getOrCreateSparkSession(
-    appName="DE_DL",
-    size="large",
-    showConsoleProgress="false",
-    shufflePartitions=200,
-    defaultParallelism=200,
-    memory="10g",
-    memoryOverhead="1g",
-    cores=5,
-    maxExecutors=5,
-):
-    """
+    appName: str = "DE_DL",
+    size: Literal["small", "medium", "large", "extra_large", "custom"] = "large",
+    showConsoleProgress: Literal["false", "true"] = "false",
+    shufflePartitions: int = 200,
+    defaultParallelism: int = 200,
+    memory: str = "10g",
+    memoryOverhead: str = "1g",
+    cores: int = 5,
+    maxExecutors: int = 5,
+) -> SparkSession:
+    """Start a Spark session (size/custom) and show Spark UI link.
+
     Starts spark session dependent on size category specified
     or starts custom session on specified parameters. Also generates
     Spark UI link in console for monitoring session progress/resource use.
 
     Parameters
     ----------
-    appName : str
-      The name of the spark session
-    size: {'small','medium','large','extra_large','custom'},default = 'large'
-      The size category of session to be started
-    showConsoleProgress ; {True, False}, default = 'false'
-      Option to display UI metrics in console
-    shufflePartitions : int, default = 200
-      The default number of partitions to be used in repartitioning
-    defaultParallelism: int, default = 200
-      Default number of partitions in resilient distributed datasets (RDDs)
-      returned by transformations like join, reduceByKey, and parallelize
-      when no shufflePartition number is set.
-    memory : str, default = 10g(GB)
-      Executor memory allocation
-    memoryOverhead : str, default = 1g(GB)
-      The amount of off-heap memory to be allocated per driver in cluster mode
-    cores : int, default = 5
-      The number of cores to use on each executor
-    maxExecutors : int, default = 5
-      Upper bound for the number of executors
+    appName : str, optional
+        The name of the spark session. Defaults to "DE_DL".
+    size : typing.Literal["small", "medium", "large", "extra_large", "custom"], optional
+        The size category of session to be started. Defaults to "large".
+    showConsoleProgress : typing.Literal["false", "true"], optional
+        Option to display UI metrics in console. Defaults to "false".
+    shufflePartitions : int, optional
+        The default number of partitions to be used in repartitioning.
+        Defaults to 200.
+    defaultParallelism : int, optional
+        Default number of partitions in resilient distributed datasets (RDDs)
+        returned by transformations like join, reduceByKey, and parallelize
+        when no shufflePartition number is set. Defaults to 200.
+    memory : str, optional
+        Executor memory allocation. Defaults to "10g".
+    memoryOverhead : str, optional
+        The amount of off-heap memory to be allocated per driver in
+        cluster mode. Defaults to "1g".
+    cores : int, optional
+        The number of cores to use on each executor. Defaults to 5.
+    maxExecutors : int, optional
+        Upper bound for the number of executors. Defaults to 5.
 
     Returns
     -------
-     sparkSession and Spark UI web link in workbench console
-
-    Raises
-    -------
-      None at present.
+    pyspark.sql.SparkSession
+        Also displays a Spark UI web link in the workbench console.
     """
     # obtain spark UI url parameters
     url = (
