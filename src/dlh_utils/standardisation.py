@@ -1,6 +1,6 @@
 """Functions used to standardise and clean data prior to linkage."""
 
-from typing import Literal
+from typing import Any, Literal
 
 import pyspark.sql.functions as F
 from pyspark.sql import DataFrame, SparkSession
@@ -139,7 +139,9 @@ def standardise_white_space(
     return df
 
 
-def align_forenames(df, first_name, middle_name, identifier, sep=" "):
+def align_forenames(
+    df: DataFrame, first_name: str, middle_name: str, identifier: str, sep: str = " "
+) -> DataFrame:
     """Split and align first/middle name columns, repartition by id.
 
     Standardises misalignments of first and middle names by splitting
@@ -167,8 +169,9 @@ def align_forenames(df, first_name, middle_name, identifier, sep=" "):
         included.
     identifier : str
         The title of the column containing unique person identifier.
-    sep : str, default = " "
-        The string separating name words in value string.
+    sep : str, optional
+        The string separating name words in value string. Defaults to "
+        ".
 
     Returns
     -------
@@ -201,38 +204,30 @@ def align_forenames(df, first_name, middle_name, identifier, sep=" "):
     return df
 
 
-##############################################################################
-
-
-def reg_replace(df, replace_dict, subset=None):
-    """
-    Uses regular expressions to replace values within dataframe columns.
+def reg_replace(
+    df: DataFrame, replace_dict: dict, subset: str | list[str] | None = None
+) -> DataFrame:
+    """Replace values within DataFrame columns using regex.
 
     Parameters
     ----------
-    df : dataframe
-      The dataframe to which the function is applied.
-    dic : dictionary
-      The values of the dictionary are the substrings
-      that are being replaced within the subset columns.
-      These need to be regex statements in the form of a
-      string. The key is the replacement. The value is the
-      regex to be replaced.
-    subset : str or list of str, default = None
-      The subset is the list of columns in the dataframe
-      on which reg_replace is performing its actions.
-      If no subset is entered the None default makes sure
-      that all columns in the dataframe are in the subset.
+    df : pyspark.sql.DataFrame
+        The DataFrame to which the function is applied.
+    dic : dict
+        The values of the dictionary are the substrings that are being
+        replaced within the subset columns. These need to be regex
+        statements in the form of a string. The key is the replacement.
+        The value is the regex to be replaced.
+    subset : str | list[str], optional
+        The subset is the list of columns in the DataFrame on which
+        reg_replace is performing its actions. If no subset is entered
+        the None default makes sure that all columns in the DataFrame
+        are in the subset. Defaults to None.
 
     Returns
     -------
-    dataframe
-      reg_replace returns the dataframe with the column values
-      changed appropriately.
-
-    Raises
-    -------
-    None at present.
+    pyspark.sql.DataFrame
+        The DataFrame with the column values changed appropriately.
     """
     if subset is None:
         subset = df.columns
@@ -248,33 +243,25 @@ def reg_replace(df, replace_dict, subset=None):
     return df
 
 
-##########################################################################
+def clean_surname(df: DataFrame, subset: str | list[str]) -> DataFrame:
+    """Clean surname column: remove invalids and concat prefixes.
 
-
-def clean_surname(df, subset):
-    """
     Removes invalid surname response values from a column, as specified
-    by components list within function. Concatenates common surname prefixes
-    to surname, as specified by prefixes list within function.
+    by components list within function. Concatenates common surname
+    prefixes to surname, as specified by prefixes list within function.
 
     Parameters
     ----------
-    df : dataframe
-      The dataframe to which the function is applied.
-    subset : str or list of str
-      The columns on which this function will be applied
+    df : pyspark.sql.DataFrame
+        The DataFrame to which the function is applied.
+    subset : str | list[str]
+        The columns on which this function will be applied.
 
     Returns
     -------
-    dataframe
-      Dataframe with standardised surname variables.
-
-    Raises
-    -------
-    None at present.
-
+    pyspark.sql.DataFrame
+        DataFrame with standardised surname variables.
     """
-
     components = [
         "NO SURNAME",
         "SURNAME",
@@ -318,31 +305,21 @@ def clean_surname(df, subset):
     return df
 
 
-############################################################################
-
-
-def clean_forename(df, subset):
-    """
-    Removes common forename prefixes from a specified column.
+def clean_forename(df: DataFrame, subset: str | list[str]) -> DataFrame:
+    """Remove common forename prefixes from a specified column.
 
     Parameters
     ----------
-    df : dataframe
-      The dataframe to which the function is applied.
-    subset : str or list of str
-      The columns on which this function will be applied.
+    df : pyspark.sql.DataFrame
+        The DataFrame to which the function is applied.
+    subset : str | list[str]
+        The columns on which this function will be applied.
 
     Returns
     -------
-    dataframe
-      Dataframe with standardised forename variables.
-
-    Raises
-    -------
-    None at present.
-
+    pyspark.sql.DataFrame
+        DataFrame with standardised forename variables.
     """
-
     components = [
         "MR",
         "MRS",
@@ -370,49 +347,40 @@ def clean_forename(df, subset):
     return df
 
 
-##########################################################################
+def group_single_characters(
+    df: DataFrame,
+    subset: str | list[str] | None = None,
+    include_terminals: bool = False,
+) -> DataFrame:
+    """Remove spaces between single characters.
 
-
-def group_single_characters(df, subset=None, include_terminals=False):
-    """
-    Remove spaces between single characters
-
-    The function takes a dataframe and specified columns.
-    It then looks for single characters within the column
-    values and groups them together by removing the whitespace
-    around them.
+    The function takes a dataframe and specified columns. It then looks
+    for single characters within the column values and groups them
+    together by removing the whitespace around them.
 
 
     Parameters
     ----------
-    df : dataframe
-      The dataframe to which the function is applied.
-    subset : str or list of str, default = None
-      Subset of columns on which the function is applied.
-      If left as None, the function applies to all
-      columns. If the user gives a string value it
-      is converted to a list of one column.
-      It can also take a list of strings.
-    include_terminals : boolean, default = False
-      If False, single characters in the first and last
-      positions will not be grouped; for example, "a bc d" will
-      be returned as "a bc d" without grouping the "a" and "d"
-      If True, single characters in the first and last
-      positions will be grouped; for example, "a bc d" will
-      be grouped as "abcd"
+    df : pyspark.sql.DataFrame
+        The DataFrame to which the function is applied.
+    subset : str | list[str], optional
+        Subset of columns on which the function is applied. If left as
+        None, the function applies to all columns. If the user gives a
+        string value it is converted to a list of one column. It can
+        also take a list of strings. Defaults to None.
+    include_terminals : bool, optional
+        If False, single characters in the first and last positions will
+        not be grouped; for example, "a bc d" will be returned as "a bc
+        d" without grouping the "a" and "d" If True, single characters
+        in the first and last positions will be grouped; for example, "a
+        bc d" will be grouped as "abcd". Defaults to False.
 
     Returns
     -------
-    dataframe
-      Dataframe with the same columns but with the
-      group single characters function applied to
-      the specified columns.
-
-    Raises
-    ------
-    None at present.
+    pyspark.sql.DataFrame
+        DataFrame with the same columns but with the group single
+        characters function applied to the specified columns.
     """
-
     if subset is None:
         subset = df.columns
 
@@ -430,39 +398,29 @@ def group_single_characters(df, subset=None, include_terminals=False):
     return df
 
 
-##########################################################################
+def clean_hyphens(df: DataFrame, subset: str | list[str] | None = None) -> DataFrame:
+    """Clean hyphens in specified string columns.
 
-
-def clean_hyphens(df, subset=None):
-    """
-    This cleans the hyphens within the columns
-    specified by the function. It does this by removing
-    hyphens at the start and end of string values and removes
-    the whitespace around the hyphens.
+    This cleans the hyphens within the columns specified by the
+    function. It does this by removing hyphens at the start and end of
+    string values and removes the whitespace around the hyphens.
 
     Parameters
     ----------
-    df : dataframe
-      Dataframe to which the function is applied.
-    subset : str or list of str, default = None
-      Subset of columns on which the function is applied.
-      If left as None, the function applies to all
-      columns. If the user gives a string value it
-      is converted to a list of one column.
-      It can also take a list of strings.
+    df : pyspark.sql.DataFrame
+        DataFrame to which the function is applied.
+    subset : str | list[str], optional
+        Subset of columns on which the function is applied. If left as
+        None, the function applies to all columns. If the user gives a
+        string value it is converted to a list of one column. It can
+        also take a list of strings. Defaults to None.
 
     Returns
     -------
-    dataframe
-      Dataframe with the same columns but with the
-      clean hyphen function applied to the specified
-      columns.
-
-    Raises
-    ------
-    None at present.
+    pyspark.sql.DataFrame
+        DataFrame with the same columns but with the clean hyphen
+        function applied to the specified columns.
     """
-
     if subset is None:
         subset = df.columns
 
@@ -479,81 +437,75 @@ def clean_hyphens(df, subset=None):
     return df
 
 
-##########################################################################
+def standardise_null(
+    df: DataFrame,
+    replace: Any,
+    subset: str | list[str] | None = None,
+    replace_with: Any = None,
+    regex: bool = True,
+) -> DataFrame:
+    """Cast values used as nulls to None type (true null).
 
-
-def standardise_null(df, replace, subset=None, replace_with=None, regex=True):
-    """
-    Casts values used as nulls to None type (true null).
-
-    If regex is True, this allows user to enter a regular expression that
-    captures all values to be treated as null and casts these to specified
-    values. Otherwise, the exact values entered in replace are searched
-    for and replaced in the data.
+    If regex is True, this allows user to enter a regular expression
+    that captures all values to be treated as null and casts these to
+    specified values. Otherwise, the exact values entered in replace are
+    searched for and replaced in the data.
 
     Parameters
     ----------
-    df : dataframe
-      Dataframe to which the function is applied.
-    replace: data-type
-      These are the artificial null values
-      that are being replaced.
-    subset : str or list of str, default = None
-      Subset of columns on which the function is applied.
-      If left as None, the function applies to all
-      columns. If the user gives a string value it
-      is converted to a list of one column.
-      It can also take a list of strings.
-    replace_with : data-type, default = None,
-      This is the value the artificial null values
-      are converted to (by default None or true null)
-    regex: {True,False}, default = True
-      The regex argument is a boolean value.
-      Setting it to True ensures the replace value
-      is treated like a regex statement.
-      Setting it to False makes sure the replacement
-      value is not treated like a regex statement.
+    df : pyspark.sql.DataFrame
+        DataFrame to which the function is applied.
+    replace : data-type
+        These are the artificial null values that are being replaced.
+    subset : str | list[str], optional
+        Subset of columns on which the function is applied. If left as
+        None, the function applies to all columns. If the user gives a
+        string value it is converted to a list of one column. It can
+        also take a list of strings. Defaults to None.
+    replace_with : data-type, optional
+        This is the value the artificial null values are converted to
+        (by default None or true null). Defaults to None.
+    regex : bool, optional
+        The regex argument is a boolean value. Setting it to True
+        ensures the replace value is treated like a regex statement.
+        Setting it to False makes sure the replacement value is not
+        treated like a regex statement. Defaults to True.
 
     Returns
     -------
-    dataframe
-      The function returns the dataframe with
-      artificial nulls corrected to the replace value
-      in the subset of columns on which the function is applied.
+    pyspark.sql.DataFrame
+        The function returns the DataFrame with artificial nulls
+        corrected to the replace value in the subset of columns on which
+        the function is applied.
 
-    Raises
-    -------
-    None at present.
+    Examples
+    --------
+    >>> df.show()
+    +---+--------+-----------+-------+----------+---+--------+
+    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|
+    +---+--------+-----------+-------+----------+---+--------+
+    |  1|   Homer|        Jay|     -9|1983-05-12|  M|ET74 2SP|
+    |  2|   Marge|         -9|Simpson|1983-03-19|  F|ET74 2SP|
+    |  3|      -9|      Jo-Jo|Simpson|2012-04-01| -9|ET74 2SP|
+    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
+    |  4|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|
+    |  5|  Maggie|       null|     -9|2021-01-12| -9|ET74 2SP|
+    +---+--------+-----------+-------+----------+---+--------+
 
-    Example
-    -------
-
-    > df.show()
-    +---+--------+----------+-------+----------+---+--------+
-    | ID|Forename|Middlename|Surname|       DoB|Sex|Postcode|
-    +---+--------+----------+-------+----------+---+--------+
-    |  1|   Homer|       Jay|     -9|1983-05-12|  M|ET74 2SP|
-    |  2|   Marge|        -9|Simpson|1983-03-19|  F|ET74 2SP|
-    |  3|      -9|     Jo-Jo|Simpson|2012-04-01| -9|ET74 2SP|
-    |  3|    Bart|     Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  4|    Lisa|     Marie|Simpson|2014-05-09|  F|ET74 2SP|
-    |  5|  Maggie|      null|     -9|2021-01-12| -9|ET74 2SP|
-    +---+--------+----------+-------+----------+---+--------+
-
-    > standardise_null(df, replace = '-9', subset=None,replace_with='DONUTS',
-                       regex=False).show()
-    +---+--------+----------+-------+----------+------+--------+
-    | ID|Forename|Middlename|Surname|       DoB|   Sex|Postcode|
-    +---+--------+----------+-------+----------+------+--------+
-    |  1|   Homer|       Jay| DONUTS|1983-05-12|     M|ET74 2SP|
-    |  2|   Marge|    DONUTS|Simpson|1983-03-19|     F|ET74 2SP|
-    |  3|  DONUTS|     Jo-Jo|Simpson|2012-04-01|DONUTS|ET74 2SP|
-    |  3|    Bart|     Jo-Jo|Simpson|2012-04-01|     M|ET74 2SP|
-    |  4|    Lisa|     Marie|Simpson|2014-05-09|     F|ET74 2SP|
-    |  5|  Maggie|      null| DONUTS|2021-01-12|DONUTS|ET74 2SP|
-    +---+--------+----------+-------+----------+------+--------+
+    >>> standardise_null(
+    ...     df, replace="-9", subset=None, replace_with="DONUTS", regex=False
+    ... ).show()
+    +---+--------+-----------+-------+----------+------+--------+
+    | ID|Forename|Middle_name|Surname|       DoB|   Sex|Postcode|
+    +---+--------+-----------+-------+----------+------+--------+
+    |  1|   Homer|        Jay| DONUTS|1983-05-12|     M|ET74 2SP|
+    |  2|   Marge|     DONUTS|Simpson|1983-03-19|     F|ET74 2SP|
+    |  3|  DONUTS|      Jo-Jo|Simpson|2012-04-01|DONUTS|ET74 2SP|
+    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|     M|ET74 2SP|
+    |  4|    Lisa|      Marie|Simpson|2014-05-09|     F|ET74 2SP|
+    |  5|  Maggie|       null| DONUTS|2021-01-12|DONUTS|ET74 2SP|
+    +---+--------+-----------+-------+----------+------+--------+
     """
-
     if subset is None:
         subset = df.columns
 
@@ -581,68 +533,58 @@ def standardise_null(df, replace, subset=None, replace_with=None, regex=True):
     return df
 
 
-#################################################################
+def max_white_space(
+    df: DataFrame, limit: int, subset: str | list[str] | None = None
+) -> DataFrame:
+    """Set maximum number of whitespaces in a row.
 
-
-def max_white_space(df, limit, subset=None):
-    """
-    Sets maximum number of whitespaces in a row.
-
-    Any whitespace above the limit e.g. 3 subsequent whitespaces
-    when the limit is 2 will be changed to the limit value within
-    the string.
+    Any whitespace above the limit e.g. 3 subsequent whitespaces when
+    the limit is 2 will be changed to the limit value within the string.
 
     Parameters
     ----------
-    df : dataframe
-      Dataframe to which the function is applied.
+    df : pyspark.sql.DataFrame
+        DataFrame to which the function is applied.
     limit : int
-      This is the maximum value subsequent whitespaces
-      are limited to. Any subsequent whitespaces above the
-      limit value will be reduced to the limit value.
-    subset : str or list of str, default = None
-      The subset is the column(s) on which the function is applied.
-      If None the function applies to the whole dataframe.
+        This is the maximum value subsequent whitespaces are limited to.
+        Any subsequent whitespaces above the limit value will be reduced
+        to the limit value.
+    subset : str | list[str], optional
+        The subset is the column(s) on which the function is applied. If
+        None the function applies to the whole DataFrame. Defaults to
+        None.
 
     Returns
     -------
-    dataframe
-      Function returns dataframe with whitespaces
-      limited to the limit value in the chosen subset
-      of columns.
+    pyspark.sql.DataFrame
+        Function returns DataFrame with whitespaces limited to the limit
+        value in the chosen subset of columns.
 
-    Raises
-    -------
-    None at present.
-
-    Example
-    -------
-
-    > df.show()
-    +---+----------+----------+-------------+----------+---+----------------+
-    | ID|  Forename|Middlename|      Surname|       DoB|Sex|        Postcode|
-    +---+----------+----------+-------------+----------+---+----------------+
-    |  1|  Hom   er|       Jay|           -9|1983-05-12|  M|        ET74 2SP|
-    |  2|   Ma  rge|        -9|Simpson      |1983-03-19|  F|ET74         2SP|
-    |  3|        -9|     Jo-Jo|      Simpson|2012-04-01| -9|      ET74   2SP|
-    |  3|      Bart|     Jo-Jo|      Simpson|2012-04-01|  M|        ET74 2SP|
-    |  4|      Lisa|     Marie|      Simpson|2014-05-09|  F|        ET74 2SP|
-    |  5|Maggie    |      null|           -9|2021-01-12| -9|        ET74 2SP|
-    +---+----------+----------+-------------+----------+---+----------------+
-
-    > max_white_space(df, limit = 1, subset=None).show()
-    +---+--------+----------+-------+----------+---+--------+
-    | ID|Forename|Middlename|Surname|       DoB|Sex|Postcode|
-    +---+--------+----------+-------+----------+---+--------+
-    |  1|   Homer|       Jay|     -9|1983-05-12|  M|ET74 2SP|
-    |  2|   Marge|        -9|Simpson|1983-03-19|  F| ET742SP|
-    |  3|      -9|     Jo-Jo|Simpson|2012-04-01| -9| ET742SP|
-    |  3|    Bart|     Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  4|    Lisa|     Marie|Simpson|2014-05-09|  F|ET74 2SP|
-    |  5|  Maggie|      null|     -9|2021-01-12| -9|ET74 2SP|
-    +---+--------+----------+-------+----------+---+--------+
+    Examples
+    --------
+    >>> df.show()
+    +---+----------+-----------+-------------+----------+---+----------------+
+    | ID|  Forename|Middle_name|      Surname|       DoB|Sex|        Postcode|
+    +---+----------+-----------+-------------+----------+---+----------------+
+    |  1|  Hom   er|        Jay|           -9|1983-05-12|  M|        ET74 2SP|
+    |  2|   Ma  rge|         -9|Simpson      |1983-03-19|  F|ET74         2SP|
+    |  3|        -9|      Jo-Jo|      Simpson|2012-04-01| -9|      ET74   2SP|
+    |  3|      Bart|      Jo-Jo|      Simpson|2012-04-01|  M|        ET74 2SP|
+    |  4|      Lisa|      Marie|      Simpson|2014-05-09|  F|        ET74 2SP|
+    |  5|Maggie    |       null|           -9|2021-01-12| -9|        ET74 2SP|
+    +---+----------+-----------+-------------+----------+---+----------------+
+    >>> max_white_space(df, limit=1, subset=None).show()
+    +---+--------+-----------+-------+----------+---+--------+
+    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|
+    +---+--------+-----------+-------+----------+---+--------+
+    |  1|   Homer|        Jay|     -9|1983-05-12|  M|ET74 2SP|
+    |  2|   Marge|         -9|Simpson|1983-03-19|  F| ET742SP|
+    |  3|      -9|      Jo-Jo|Simpson|2012-04-01| -9| ET742SP|
+    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
+    |  4|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|
+    |  5|  Maggie|       null|     -9|2021-01-12| -9|ET74 2SP|
+    +---+--------+-----------+-------+----------+---+--------+
     """
-
     if subset is None:
         subset = df.columns
 
@@ -666,67 +608,58 @@ def max_white_space(df, limit, subset=None):
     return df
 
 
-#################################################################
+def max_hyphen(
+    df: DataFrame, limit: int, subset: str | list[str] | None = None
+) -> DataFrame:
+    """Set maximum number of hyphens in a row.
 
-
-def max_hyphen(df, limit, subset=None):
-    """
-    Sets maximum number of hyphens in a row.
-
-    Any hyphens above the limit e.g. 3 subsequent hyphens when the
-    limit is 2 will be changed to the limit value within the string.
+    Any hyphens above the limit e.g. 3 subsequent hyphens when the limit
+    is 2 will be changed to the limit value within the string.
 
     Parameters
     ----------
-    df : dataframe
-      Dataframe to which the function is applied.
+    df : pyspark.sql.DataFrame
+        DataFrame to which the function is applied.
     limit : int
-      This is the maximum value subsequent hyphens
-      are limited to. Any subsequent hyphens above the
-      limit value will be reduced to the limit value.
-    subset : str or list of str, default = None
-      The subset is the column(s) on which the function is applied.
-      If None the function applies to the whole dataframe.
+        This is the maximum value subsequent hyphens are limited to. Any
+        subsequent hyphens above the limit value will be reduced to the
+        limit value.
+    subset : str | list[str], optional
+        The subset is the column(s) on which the function is applied. If
+        None the function applies to the whole DataFrame. Defaults to
+        None.
 
     Returns
     -------
-    dataframe
-      Function returns dataframe with hyphens
-      limited to the limit value in the chosen subset
-      of columns.
+    pyspark.sql.DataFrame
+        Function returns DataFrame with hyphens limited to the limit
+        value in the chosen subset of columns.
 
-    Raises
-    -------
-    None at present.
-
-    Example
-    -------
-    > df.show()
-    +---+--------+----------+---------+----------+---+--------+
-    | ID|Forename|Middlename|  Surname|       DoB|Sex|Postcode|
-    +---+--------+----------+---------+----------+---+--------+
-    |  1|   Homer|       Jay|Simp--son|1983-05-12|  M|ET74 2SP|
-    |  2|   Marge| Jul---iet|Simp--son|1983-03-19|  F|ET74 2SP|
-    |  3|    Bart|  Jo----Jo|Simp--son|2012-04-01|  M|ET74 2SP|
-    |  3|    Bart|     Jo-Jo|  Simpson|2012-04-01|  M|ET74 2SP|
-    |  4|    Lisa|     Marie|  Simpson|2014-05-09|  F|ET74 2SP|
-    |  5|  Maggie|      null|Simp--son|2021-01-12|  F|ET74 2SP|
-    +---+--------+----------+---------+----------+---+--------+
-
-    > max_hyphen(df, limit = 1, subset=None).show()
-    +---+--------+----------+--------+----------+---+--------+
-    | ID|Forename|Middlename| Surname|       DoB|Sex|Postcode|
-    +---+--------+----------+--------+----------+---+--------+
-    |  1|   Homer|       Jay|Simp-son|1983-05-12|  M|ET74 2SP|
-    |  2|   Marge|   Jul-iet|Simp-son|1983-03-19|  F|ET74 2SP|
-    |  3|    Bart|     Jo-Jo|Simp-son|2012-04-01|  M|ET74 2SP|
-    |  3|    Bart|     Jo-Jo| Simpson|2012-04-01|  M|ET74 2SP|
-    |  4|    Lisa|     Marie| Simpson|2014-05-09|  F|ET74 2SP|
-    |  5|  Maggie|      null|Simp-son|2021-01-12|  F|ET74 2SP|
-    +---+--------+----------+--------+----------+---+--------+
-
+    Examples
+    --------
+    >>> df.show()
+    +---+--------+-----------+---------+----------+---+--------+
+    | ID|Forename|Middle_name|  Surname|       DoB|Sex|Postcode|
+    +---+--------+-----------+---------+----------+---+--------+
+    |  1|   Homer|        Jay|Simp--son|1983-05-12|  M|ET74 2SP|
+    |  2|   Marge|  Jul---iet|Simp--son|1983-03-19|  F|ET74 2SP|
+    |  3|    Bart|   Jo----Jo|Simp--son|2012-04-01|  M|ET74 2SP|
+    |  3|    Bart|      Jo-Jo|  Simpson|2012-04-01|  M|ET74 2SP|
+    |  4|    Lisa|      Marie|  Simpson|2014-05-09|  F|ET74 2SP|
+    |  5|  Maggie|       null|Simp--son|2021-01-12|  F|ET74 2SP|
+    +---+--------+-----------+---------+----------+---+--------+
+    >>> max_hyphen(df, limit=1, subset=None).show()
+    +---+--------+-----------+--------+----------+---+--------+
+    | ID|Forename|Middle_name| Surname|       DoB|Sex|Postcode|
+    +---+--------+-----------+--------+----------+---+--------+
+    |  1|   Homer|        Jay|Simp-son|1983-05-12|  M|ET74 2SP|
+    |  2|   Marge|    Jul-iet|Simp-son|1983-03-19|  F|ET74 2SP|
+    |  3|    Bart|      Jo-Jo|Simp-son|2012-04-01|  M|ET74 2SP|
+    |  3|    Bart|      Jo-Jo| Simpson|2012-04-01|  M|ET74 2SP|
+    |  4|    Lisa|      Marie| Simpson|2014-05-09|  F|ET74 2SP|
+    |  5|  Maggie|       null|Simp-son|2021-01-12|  F|ET74 2SP|
+    +---+--------+-----------+--------+----------+---+--------+
     """
-
     if subset is None:
         subset = df.columns
 
@@ -753,12 +686,12 @@ def max_hyphen(df, limit, subset=None):
     return df
 
 
-#################################################################
-
-
-def remove_punct(df, subset=None, keep=None):
-    """
-    Removes punctuation from strings.
+def remove_punct(
+    df: DataFrame,
+    subset: str | list[str] | None = None,
+    keep: str | list[str] | None = None,
+) -> DataFrame:
+    """Remove punctuation from strings.
 
     Where the keep value is set, it will remove all punctuation
     from given columns other than the punctuation value set by
@@ -766,56 +699,49 @@ def remove_punct(df, subset=None, keep=None):
 
     Parameters
     ----------
-    df : dataframe
-      Dataframe to which the function is applied.
-    subset :  str or list of str, default = None
-      The subset is the column(s) on which the function is applied.
-      If None the function applies to the whole dataframe.
-    keep: str or list of str, default = None
-      Can be set to a string with a symbol you want to keep, e.g.
-      if you want to keep the addition symbol set keep = '+' and
-      it will refrain from removing the + symbol from the
-      subset of columns.
+    df : pyspark.sql.DataFrame
+        DataFrame to which the function is applied.
+    subset : str | list[str], optional
+        The subset is the column(s) on which the function is applied.
+        If None the function applies to the whole DataFrame. Defaults to None.
+    keep: str | list[str], optional
+        Can be set to a string with a symbol you want to keep, e.g.
+        if you want to keep the addition symbol set keep = '+' and
+        it will refrain from removing the + symbol from the
+        subset of columns. Defaults to None.
 
     Returns
     -------
-    dataframe
-      Dataframe with the same columns but with the
-      remove_punct function applied to the specified
-      columns.
-
-    Raises
-    -------
-    None at present.
+    pyspark.sql.DataFrame
+        DataFrame with the same columns but with the
+        `remove_punct` function applied to the specified
+        columns.
 
     Example
     -------
-    > df.show()
-    +---+--------+----------+---------+----------+---+--------+
-    | ID|Forename|Middlename|  Surname|       DoB|Sex|Postcode|
-    +---+--------+----------+---------+----------+---+--------+
-    |  1|  Ho'mer|       Jay|Simp--son|1983-05-12|  M|ET74 2SP|
-    |  2|   Marge| Jul---iet|Simp--son|1983-03-19|  F|ET74 2SP|
-    |  3|    Bart|  Jo----Jo|Simp--son|2012-04-01|  M|ET74 2SP|
-    |  3|    Bart|     Jo-Jo|  Simpson|2012-04-01|  M|ET74 2SP|
-    |  4|    Lisa|     Marie|  Simpson|2014-05-09|  F|ET74 2SP|
-    |  5| Ma'ggie|      null|Simp--son|2021-01-12|  F|ET74 2SP|
-    +---+--------+----------+---------+----------+---+--------+
-
-    > remove_punct(df,subset=None,keep=None).show()
-    +---+--------+----------+-------+--------+---+--------+
-    | ID|Forename|Middlename|Surname|     DoB|Sex|Postcode|
-    +---+--------+----------+-------+--------+---+--------+
-    |  1|   Homer|       Jay|Simpson|19830512|  M|ET74 2SP|
-    |  2|   Marge|    Juliet|Simpson|19830319|  F|ET74 2SP|
-    |  3|    Bart|      JoJo|Simpson|20120401|  M|ET74 2SP|
-    |  3|    Bart|      JoJo|Simpson|20120401|  M|ET74 2SP|
-    |  4|    Lisa|     Marie|Simpson|20140509|  F|ET74 2SP|
-    |  5|  Maggie|      null|Simpson|20210112|  F|ET74 2SP|
-    +---+--------+----------+-------+--------+---+--------+
-
+    >>> df.show()
+    +---+--------+-----------+---------+----------+---+--------+
+    | ID|Forename|Middle_name|  Surname|       DoB|Sex|Postcode|
+    +---+--------+-----------+---------+----------+---+--------+
+    |  1|  Ho'mer|        Jay|Simp--son|1983-05-12|  M|ET74 2SP|
+    |  2|   Marge|  Jul---iet|Simp--son|1983-03-19|  F|ET74 2SP|
+    |  3|    Bart|   Jo----Jo|Simp--son|2012-04-01|  M|ET74 2SP|
+    |  3|    Bart|      Jo-Jo|  Simpson|2012-04-01|  M|ET74 2SP|
+    |  4|    Lisa|      Marie|  Simpson|2014-05-09|  F|ET74 2SP|
+    |  5| Ma'ggie|       null|Simp--son|2021-01-12|  F|ET74 2SP|
+    +---+--------+-----------+---------+----------+---+--------+
+    >>> remove_punct(df, subset=None, keep=None).show()
+    +---+--------+-----------+-------+--------+---+--------+
+    | ID|Forename|Middle_name|Surname|     DoB|Sex|Postcode|
+    +---+--------+-----------+-------+--------+---+--------+
+    |  1|   Homer|        Jay|Simpson|19830512|  M|ET74 2SP|
+    |  2|   Marge|     Juliet|Simpson|19830319|  F|ET74 2SP|
+    |  3|    Bart|       JoJo|Simpson|20120401|  M|ET74 2SP|
+    |  3|    Bart|       JoJo|Simpson|20120401|  M|ET74 2SP|
+    |  4|    Lisa|      Marie|Simpson|20140509|  F|ET74 2SP|
+    |  5|  Maggie|       null|Simpson|20210112|  F|ET74 2SP|
+    +---+--------+-----------+-------+--------+---+--------+
     """
-
     if subset is None:
         subset = df.columns
 
@@ -833,65 +759,61 @@ def remove_punct(df, subset=None, keep=None):
     return df
 
 
-#####################################################################
+def standardise_case(
+    df: DataFrame,
+    subset: str | list[str] | None = None,
+    val: Literal["upper", "lower", "title"] = "upper",
+) -> DataFrame:
+    """Convert specified columns to upper/lower/title case.
 
-
-def standardise_case(df, subset=None, val="upper"):
-    """
-    Converts the case of all specified variables in a dataframe into
-    one format. For example, using upper will set the case of all
-    specified variables to UPPER CASE.
+    Converts the case of all specified variables in a DataFrame into one
+    format. For example, using upper will set the case of all specified
+    variables to UPPER CASE.
 
 
     Parameters
     ----------
-    df : dataframe
-      Dataframe to which the function is applied.
-    subset :  str or list of str, default = None
-      The subset is the column(s) on which the function is applied.
-      If None the function applies to the whole dataframe.
-    val: {'upper','lower','title'}, default = 'upper'
-      Takes three types of string values
-      and changes the values in the subset columns to the
-      case type respectively.
+    df : pyspark.sql.DataFrame
+        DataFrame to which the function is applied.
+    subset : str | list[str], optional
+        The subset is the column(s) on which the function is applied. If
+        None the function applies to the whole DataFrame. Defaults to
+        None.
+    val : typing.Literal["upper", "lower", "title"], optional
+        Takes three types of string values and changes the values in the
+        subset columns to the case type respectively. Defaults to
+        "upper".
 
     Returns
     -------
-    dataframe
-      Function returns dataframe with case conversions applied.
+    pyspark.sql.DataFrame
+        Function returns DataFrame with case conversions applied.
 
-    Raises
-    -------
-      None at present.
-
-    Example
-    -------
-    > df.show()
-    +---+--------+----------+-------+----------+---+--------+
-    | ID|Forename|Middlename|Surname|       DoB|Sex|Postcode|
-    +---+--------+----------+-------+----------+---+--------+
-    |  1|   Homer|       Jay|SiMpSoN|1983-05-12|  M|ET74 2SP|
-    |  2|   mARGE|    juliet|SiMpSoN|1983-03-19|  F|ET74 2SP|
-    |  3|    Bart|      JOJo|SiMpSoN|2012-04-01|  M|ET74 2SP|
-    |  3|    Bart|     Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  4|    LISA|     Marie|SiMpSoN|2014-05-09|  F|ET74 2SP|
-    |  5|  MAGGie|      null|SiMpSoN|2021-01-12|  F|ET74 2SP|
-    +---+--------+----------+-------+----------+---+--------+
-
-    > standardise_case(df,subset = None, val='upper').show()
-    +---+--------+----------+-------+----------+---+--------+
-    | ID|Forename|Middlename|Surname|       DoB|Sex|Postcode|
-    +---+--------+----------+-------+----------+---+--------+
-    |  1|   HOMER|       JAY|SIMPSON|1983-05-12|  M|ET74 2SP|
-    |  2|   MARGE|    JULIET|SIMPSON|1983-03-19|  F|ET74 2SP|
-    |  3|    BART|      JOJO|SIMPSON|2012-04-01|  M|ET74 2SP|
-    |  3|    BART|     JO-JO|SIMPSON|2012-04-01|  M|ET74 2SP|
-    |  4|    LISA|     MARIE|SIMPSON|2014-05-09|  F|ET74 2SP|
-    |  5|  MAGGIE|      null|SIMPSON|2021-01-12|  F|ET74 2SP|
-    +---+--------+----------+-------+----------+---+--------+
-
+    Examples
+    --------
+    >>> df.show()
+    +---+--------+-----------+-------+----------+---+--------+
+    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|
+    +---+--------+-----------+-------+----------+---+--------+
+    |  1|   Homer|        Jay|SiMpSoN|1983-05-12|  M|ET74 2SP|
+    |  2|   mARGE|     juliet|SiMpSoN|1983-03-19|  F|ET74 2SP|
+    |  3|    Bart|       JOJo|SiMpSoN|2012-04-01|  M|ET74 2SP|
+    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
+    |  4|    LISA|      Marie|SiMpSoN|2014-05-09|  F|ET74 2SP|
+    |  5|  MAGGie|       null|SiMpSoN|2021-01-12|  F|ET74 2SP|
+    +---+--------+-----------+-------+----------+---+--------+
+    >>> standardise_case(df, subset=None, val="upper").show()
+    +---+--------+-----------+-------+----------+---+--------+
+    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|
+    +---+--------+-----------+-------+----------+---+--------+
+    |  1|   HOMER|        JAY|SIMPSON|1983-05-12|  M|ET74 2SP|
+    |  2|   MARGE|     JULIET|SIMPSON|1983-03-19|  F|ET74 2SP|
+    |  3|    BART|       JOJO|SIMPSON|2012-04-01|  M|ET74 2SP|
+    |  3|    BART|      JO-JO|SIMPSON|2012-04-01|  M|ET74 2SP|
+    |  4|    LISA|      MARIE|SIMPSON|2014-05-09|  F|ET74 2SP|
+    |  5|  MAGGIE|       null|SIMPSON|2021-01-12|  F|ET74 2SP|
+    +---+--------+-----------+-------+----------+---+--------+
     """
-
     if subset is None:
         subset = df.columns
 
@@ -911,61 +833,49 @@ def standardise_case(df, subset=None, val="upper"):
     return df
 
 
-##########################################################################
-
-
-def trim(df, subset=None):
-    """
-    Removes leading and trailing whitespace from all
-    or selected string columns.
+def trim(df: DataFrame, subset: str | list[str] | None = None) -> DataFrame:
+    """Remove leading and trailing whitespace from columns.
 
     Parameters
     ----------
-    df : dataframe
-      Dataframe to which the function is applied..
-    subset : default = None, string or list of strings
-      The subset is the column(s) on which the function is applied.
-      If None the function applies to the whole dataframe.
+    df : pyspark.sql.DataFrame
+        DataFrame to which the function is applied.
+    subset : str | list[str], optional
+        The subset is the column(s) on which the function is applied. If
+        None the function applies to the whole DataFrame. Defaults to
+        None.
 
     Returns
     -------
-    dataframe
-      Dataframe with leading and trailing whitespace removed
-      from selected or all string columns in place.
-
-    Raises
-    -------
-    None at present.
+    pyspark.sql.DataFrame
+        DataFrame with leading and trailing whitespace removed from
+        selected or all string columns in place.
 
     Example
     -------
-    > df.show()
-
-    +---+---------+----------+-------------+----------+---+--------+
-    | ID| Forename|Middlename|      Surname|       DoB|Sex|Postcode|
-    +---+---------+----------+-------------+----------+---+--------+
-    |  1|    Homer|       Jay|      SiMpSoN|1983-05-12|  M|ET74 2SP|
-    |  2|    mARGE|    juliet|   SiMpSoN   |1983-03-19|  F|ET74 2SP|
-    |  3|     Bart|      JOJo|   SiMpSoN   |2012-04-01|  M|ET74 2SP|
-    |  3|     Bart|     Jo-Jo|      Simpson|2012-04-01|  M|ET74 2SP|
-    |  4|     LISA|    Marie |   SiMpSoN   |2014-05-09|  F|ET74 2SP|
-    |  5|MAGGie   |      null|      SiMpSoN|2021-01-12|  F|ET74 2SP|
-    +---+---------+----------+-------------+----------+---+--------+
-
-    > trim(df,subset=None).show()
-
-    +---+--------+----------+-------+----------+---+--------+
-    | ID|Forename|Middlename|Surname|       DoB|Sex|Postcode|
-    +---+--------+----------+-------+----------+---+--------+
-    |  1|   Homer|       Jay|SiMpSoN|1983-05-12|  M|ET74 2SP|
-    |  2|   mARGE|    juliet|SiMpSoN|1983-03-19|  F|ET74 2SP|
-    |  3|    Bart|      JOJo|SiMpSoN|2012-04-01|  M|ET74 2SP|
-    |  3|    Bart|     Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  4|    LISA|     Marie|SiMpSoN|2014-05-09|  F|ET74 2SP|
-    |  5|  MAGGie|      null|SiMpSoN|2021-01-12|  F|ET74 2SP|
-    +---+--------+----------+-------+----------+---+--------+
+    >>> df.show()
+    +---+---------+-----------+-------------+----------+---+--------+
+    | ID| Forename|Middle_name|      Surname|       DoB|Sex|Postcode|
+    +---+---------+-----------+-------------+----------+---+--------+
+    |  1|    Homer|        Jay|      SiMpSoN|1983-05-12|  M|ET74 2SP|
+    |  2|    mARGE|     juliet|   SiMpSoN   |1983-03-19|  F|ET74 2SP|
+    |  3|     Bart|       JOJo|   SiMpSoN   |2012-04-01|  M|ET74 2SP|
+    |  3|     Bart|      Jo-Jo|      Simpson|2012-04-01|  M|ET74 2SP|
+    |  4|     LISA|     Marie |   SiMpSoN   |2014-05-09|  F|ET74 2SP|
+    |  5|MAGGie   |       null|      SiMpSoN|2021-01-12|  F|ET74 2SP|
+    +---+---------+-----------+-------------+----------+---+--------+
+    >>> trim(df, subset=None).show()
+    +---+--------+-----------+-------+----------+---+--------+
+    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|
+    +---+--------+-----------+-------+----------+---+--------+
+    |  1|   Homer|        Jay|SiMpSoN|1983-05-12|  M|ET74 2SP|
+    |  2|   mARGE|     juliet|SiMpSoN|1983-03-19|  F|ET74 2SP|
+    |  3|    Bart|       JOJo|SiMpSoN|2012-04-01|  M|ET74 2SP|
+    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
+    |  4|    LISA|      Marie|SiMpSoN|2014-05-09|  F|ET74 2SP|
+    |  5|  MAGGie|       null|SiMpSoN|2021-01-12|  F|ET74 2SP|
+    +---+--------+-----------+-------+----------+---+--------+
     """
-
     if subset is None:
         subset = df.columns
 
@@ -983,64 +893,54 @@ def trim(df, subset=None):
     return df
 
 
-##########################################################################
+def add_leading_zeros(df: DataFrame, subset: str | list[str], n: int) -> DataFrame:
+    """Pad numeric strings with leading zeros to length n.
 
-
-def add_leading_zeros(df, subset, n):
-    """
     Adds leading zeros to the numeric characters of a string, until the
-    length of the string equals n. For example if a string is 1 and n
-    is set to be 7, then the result would be 0000001.
+    length of the string equals n. For example if a string is 1 and n is
+    set to be 7, then the result would be 0000001.
 
     Parameters
     ----------
-    df : dataframe
-      Dataframe to which the function is applied.
-    subset : string or list of strings, default = None
-      The subset is the column(s) on which the function is applied.
-      If None the function applies to the whole dataframe.
-    n: int
-      This is the length to which the string is adjusted.
+    df : pyspark.sql.DataFrame
+        DataFrame to which the function is applied.
+    subset : str | list[str]
+        The subset is the column(s) on which the function is applied. If
+        None the function applies to the whole DataFrame.
+    n : int
+        This is the length to which the string is adjusted.
 
     Returns
     -------
-    dataframe
-      Returns the dataframe with the subset columns
-      padded with 0s dependant on the value of n.
+    pyspark.sql.DataFrame
+        Returns the DataFrame with the subset columns padded with 0s
+        dependant on the value of n.
 
-    Raises
-    -------
-    None at present.
-
-    Example
-    -------
-    > df.show()
-
-    +---+--------+----------+-------+----------+---+--------+
-    | ID|Forename|Middlename|Surname|       DoB|Sex|Postcode|
-    +---+--------+----------+-------+----------+---+--------+
-    |  1|   Homer|       Jay|Simpson|1983-05-12|  M|ET74 2SP|
-    |  2|   Marge|    Juliet|Simpson|1983-03-19|  F|ET74 2SP|
-    |  3|    Bart|     Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  3|    Bart|     Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  4|    Lisa|     Marie|Simpson|2014-05-09|  F|ET74 2SP|
-    |  5|  Maggie|      null|Simpson|2021-01-12|  F|ET74 2SP|
-    +---+--------+----------+-------+----------+---+--------+
-
-    > add_leading_zeros(df,subset = 'ID',n = 3).show()
-
-    +---+--------+----------+-------+----------+---+--------+
-    | ID|Forename|Middlename|Surname|       DoB|Sex|Postcode|
-    +---+--------+----------+-------+----------+---+--------+
-    |001|   Homer|       Jay|Simpson|1983-05-12|  M|ET74 2SP|
-    |002|   Marge|    Juliet|Simpson|1983-03-19|  F|ET74 2SP|
-    |003|    Bart|     Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |003|    Bart|     Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |004|    Lisa|     Marie|Simpson|2014-05-09|  F|ET74 2SP|
-    |005|  Maggie|      null|Simpson|2021-01-12|  F|ET74 2SP|
-    +---+--------+----------+-------+----------+---+--------+
+    Examples
+    --------
+    >>> df.show()
+    +---+--------+-----------+-------+----------+---+--------+
+    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|
+    +---+--------+-----------+-------+----------+---+--------+
+    |  1|   Homer|        Jay|Simpson|1983-05-12|  M|ET74 2SP|
+    |  2|   Marge|     Juliet|Simpson|1983-03-19|  F|ET74 2SP|
+    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
+    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
+    |  4|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|
+    |  5|  Maggie|       null|Simpson|2021-01-12|  F|ET74 2SP|
+    +---+--------+-----------+-------+----------+---+--------+
+    >>> add_leading_zeros(df, subset="ID", n=3).show()
+    +---+--------+-----------+-------+----------+---+--------+
+    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|
+    +---+--------+-----------+-------+----------+---+--------+
+    |001|   Homer|        Jay|Simpson|1983-05-12|  M|ET74 2SP|
+    |002|   Marge|     Juliet|Simpson|1983-03-19|  F|ET74 2SP|
+    |003|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
+    |003|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
+    |004|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|
+    |005|  Maggie|       null|Simpson|2021-01-12|  F|ET74 2SP|
+    +---+--------+-----------+-------+----------+---+--------+
     """
-
     if not isinstance(subset, list):
         subset = [subset]
 
@@ -1050,72 +950,74 @@ def add_leading_zeros(df, subset, n):
     return df
 
 
-##############################################################################
+def replace(
+    df: DataFrame,
+    subset: str | list[str],
+    replace_dict: dict,
+    use_join: bool = False,
+    use_regex: bool = False,
+) -> DataFrame:
+    """Replace specified string values using mapping or regex/join.
 
-
-def replace(df, subset, replace_dict, use_join=False, use_regex=False):
-    """
-    Replaces specific string values in given column(s) with specified values.
+    Replaces specific string values in given column(s) with specified
+    values.
 
     Parameters
     ----------
-    df : dataframe
-      Dataframe to which the function is applied.
-    subset : string or list of strings
-      The subset is the column(s) on which the function is applied.
-      If None the function applies to the whole dataframe.
-    replace_dict: dictionary
-      Dictionary given needs to be in the format of
-      value_to_be_replaced:value_to_replace_with.
-    use_join : Boolean, default = False
-      Set this to True for higher performance if you have a large
-      number of key-value pairs (e.g. industrial classifications).
-      NOTE: You cannot use this mode to replace None values.
-      Call replace() separately with use_join=False if you need to
-      replace the None values.
-    use_regex : Boolean, default = False
-      Use regular expression matching. By default replacements are
-      only done if the whole value matches the dictionary key exactly.
-      If use_regex is True, use_join must be set to False.
+    df : pyspark.sql.DataFrame
+        DataFrame to which the function is applied.
+    subset : str | list[str]
+        The subset is the column(s) on which the function is applied. If
+        None the function applies to the whole DataFrame.
+    replace_dict : dict
+        Dictionary given needs to be in the format of
+        {value_to_be_replaced: value_to_replace_with}.
+    use_join : bool, optional
+        Set this to True for higher performance if you have a large
+        number of key-value pairs (e.g. industrial classifications).
+        NOTE: You cannot use this mode to replace None values. Call
+        replace() separately with use_join=False if you need to replace
+        the None values. Defaults to False.
+    use_regex : bool, optional
+        Use regular expression matching. By default replacements are
+        only done if the whole value matches the dictionary key exactly.
+        If use_regex is True, use_join must be set to False. Defaults to
+        False.
 
     Returns
     -------
-    dataframe
-      Dataframe with replaced values as specified.
+    pyspark.sql.DataFrame
+        DataFrame with replaced values as specified.
 
     Raises
-    -------
+    ------
     ValueError if use_join and use_regex are both passed in as True.
 
-    Example
-    -------
-    > df.show()
-
-    +---+--------+----------+-------+----------+---+--------+
-    | ID|Forename|Middlename|Surname|       DoB|Sex|Postcode|
-    +---+--------+----------+-------+----------+---+--------+
-    |  1|   Homer|       Jay|Simpson|1983-05-12|  M|ET74 2SP|
-    |  2|   Marge|    Juliet|Simpson|1983-03-19|  F|ET74 2SP|
-    |  3|    Bart|     Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  3|    Bart|     Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  4|    Lisa|     Marie|Simpson|2014-05-09|  F|ET74 2SP|
-    |  5|  Maggie|      null|Simpson|2021-01-12|  F|ET74 2SP|
-    +---+--------+----------+-------+----------+---+--------+
-
-    > replace(df,subset = 'Forename',replace_dict = {'Bart': 'Turbo man'}).show()
-
-    +---+---------+----------+-------+----------+---+--------+
-    | ID| Forename|Middlename|Surname|       DoB|Sex|Postcode|
-    +---+---------+----------+-------+----------+---+--------+
-    |  1|    Homer|       Jay|Simpson|1983-05-12|  M|ET74 2SP|
-    |  2|    Marge|    Juliet|Simpson|1983-03-19|  F|ET74 2SP|
-    |  3|Turbo man|     Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  3|Turbo man|     Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  4|     Lisa|     Marie|Simpson|2014-05-09|  F|ET74 2SP|
-    |  5|   Maggie|      null|Simpson|2021-01-12|  F|ET74 2SP|
-    +---+---------+----------+-------+----------+---+--------+
+    Examples
+    --------
+    >>> df.show()
+    +---+--------+-----------+-------+----------+---+--------+
+    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|
+    +---+--------+-----------+-------+----------+---+--------+
+    |  1|   Homer|        Jay|Simpson|1983-05-12|  M|ET74 2SP|
+    |  2|   Marge|     Juliet|Simpson|1983-03-19|  F|ET74 2SP|
+    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
+    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
+    |  4|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|
+    |  5|  Maggie|       null|Simpson|2021-01-12|  F|ET74 2SP|
+    +---+--------+-----------+-------+----------+---+--------+
+    >>> replace(df, subset="Forename", replace_dict={"Bart": "Turbo man"}).show()
+    +---+---------+-----------+-------+----------+---+--------+
+    | ID| Forename|Middle_name|Surname|       DoB|Sex|Postcode|
+    +---+---------+-----------+-------+----------+---+--------+
+    |  1|    Homer|        Jay|Simpson|1983-05-12|  M|ET74 2SP|
+    |  2|    Marge|     Juliet|Simpson|1983-03-19|  F|ET74 2SP|
+    |  3|Turbo man|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
+    |  3|Turbo man|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
+    |  4|     Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|
+    |  5|   Maggie|       null|Simpson|2021-01-12|  F|ET74 2SP|
+    +---+---------+-----------+-------+----------+---+--------+
     """
-
     if use_join and use_regex:
         raise ValueError(
             "Can't call replace() with True values for both use_join and use_regex."
@@ -1167,93 +1069,83 @@ def replace(df, subset, replace_dict, use_join=False, use_regex=False):
     return df
 
 
-##############################################################################
-
-
 def standardise_date(
-    df,
-    col_name,
-    in_date_format="dd-MM-yyyy",
-    out_date_format="yyyy-MM-dd",
-    null_counts=False,
-):
-    """
-    Changes the date format of a specified date column.
+    df: DataFrame,
+    col_name: str,
+    in_date_format: str = "dd-MM-yyyy",
+    out_date_format: str = "yyyy-MM-dd",
+    null_counts: bool = False,
+) -> DataFrame:
+    """Change the date format of a specified date column.
 
-    Also has an optional argument null_counts. If set to False, the function
-    only returns the dataframe with specified date values altered.
-    However, if set to True, will also return a tuple, displaying a count of
-    nulls in the dataframe before and after the function has been applied.
-    This is because the standardise_date function will make a date
-    value null if its format differs from the in_date_format.
+    Also has an optional argument null_counts. If set to False, the
+    function only returns the DataFrame with specified date values
+    altered. However, if set to True, will also return a tuple,
+    displaying a count of nulls in the DataFrame before and after the
+    function has been applied. This is because the standardise_date
+    function will make a date value null if its format differs from the
+    in_date_format.
 
     Parameters
     ----------
-    df : dataframe
-      Dataframe to which the function is applied.
-    col_name: string
-      The column in the dataframe to which the function is being
-      applied.
-    in_date_format: default = 'dd-MM-yyyy', string
-      This is the current date format of the the column.
-    out_date_format: default = 'yyyy-MM-dd', string
-      This is the date format to which the column values will be
-      changed.
-    null_counts: default = False, bool
-      If set to True provides a tuple, where the first part displays
-      the df null count before the function has been applied, and the
-      second part is the df null count after the function has been
-      applied.
+    df : pyspark.sql.DataFrame
+        DataFrame to which the function is applied.
+    col_name : str
+        The column in the DataFrame to which the function is being
+        applied.
+    in_date_format : str, optional
+        This is the current date format of the the column. Defaults to
+        "dd-MM-yyyy".
+    out_date_format : str, optional
+        This is the date format to which the column values will be
+        changed. Defaults to "yyyy-MM-dd".
+    null_counts : bool, optional
+        If set to True provides a tuple, where the first part displays
+        the df null count before the function has been applied, and the
+        second part is the df null count after the function has been
+        applied. Defaults to False.
 
     Returns
     -------
-    If null_counts = False:
-    dataframe
-      Dataframe with specified date column values altered
-      to new specified format.
+    pyspark.sql.DataFrame | tuple[pyspark.sql.DataFrame, tuple[int, int]]
+        If null_counts=False: DataFrame with specified date column
+        values altered to new specified format. If null_counts=True:
+        tuple of DataFrame as above and tuple showing null counts before
+        and after `standardise_date` has been applied to `df`.
 
-    If null_counts = True:
-    dataframe as described above,
-    Tuple
-      showing null counts before and after standardise_date
-      has been applied to df
-
-    Raises
-    -------
-      None at present.
-
-    Example
-    -------
-    > df.show()
-
-    +---+--------+----------+-------+----------+---+--------+
-    | ID|Forename|Middlename|Surname|       DoB|Sex|Postcode|
-    +---+--------+----------+-------+----------+---+--------+
-    |  1|   Homer|       Jay|Simpson|1983-05-12|  M|ET74 2SP|
-    |  2|   Marge|    Juliet|Simpson|1983-03-19|  F|ET74 2SP|
-    |  3|    Bart|     Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  3|    Bart|     Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  4|    Lisa|     Marie|Simpson|2014-05-09|  F|ET74 2SP|
-    |  5|  Maggie|      null|Simpson|2021-01-12|  F|ET74 2SP|
-    +---+--------+----------+-------+----------+---+--------+
-
-    > standardise_date(df,col_name = 'DoB',in_date_format = 'yyyy-MM-dd',
-                       out_date_format = 'dd/MM/yyyy').show()
-
-    +---+--------+----------+-------+----------+---+--------+
-    | ID|Forename|Middlename|Surname|       DoB|Sex|Postcode|
-    +---+--------+----------+-------+----------+---+--------+
-    |  1|   Homer|       Jay|Simpson|12/05/1983|  M|ET74 2SP|
-    |  2|   Marge|    Juliet|Simpson|19/03/1983|  F|ET74 2SP|
-    |  3|    Bart|     Jo-Jo|Simpson|01/04/2012|  M|ET74 2SP|
-    |  3|    Bart|     Jo-Jo|Simpson|01/04/2012|  M|ET74 2SP|
-    |  4|    Lisa|     Marie|Simpson|09/05/2014|  F|ET74 2SP|
-    |  5|  Maggie|      null|Simpson|12/01/2021|  F|ET74 2SP|
-    +---+--------+----------+-------+----------+---+--------+
+    Examples
+    --------
+    >>> df.show()
+    +---+--------+-----------+-------+----------+---+--------+
+    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|
+    +---+--------+-----------+-------+----------+---+--------+
+    |  1|   Homer|        Jay|Simpson|1983-05-12|  M|ET74 2SP|
+    |  2|   Marge|     Juliet|Simpson|1983-03-19|  F|ET74 2SP|
+    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
+    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
+    |  4|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|
+    |  5|  Maggie|       null|Simpson|2021-01-12|  F|ET74 2SP|
+    +---+--------+-----------+-------+----------+---+--------+
+    >>> standardise_date(
+    ...     df,
+    ...     col_name="DoB",
+    ...     in_date_format="yyyy-MM-dd",
+    ...     out_date_format="dd/MM/yyyy",
+    ... ).show()
+    +---+--------+-----------+-------+----------+---+--------+
+    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|
+    +---+--------+-----------+-------+----------+---+--------+
+    |  1|   Homer|        Jay|Simpson|12/05/1983|  M|ET74 2SP|
+    |  2|   Marge|     Juliet|Simpson|19/03/1983|  F|ET74 2SP|
+    |  3|    Bart|      Jo-Jo|Simpson|01/04/2012|  M|ET74 2SP|
+    |  3|    Bart|      Jo-Jo|Simpson|01/04/2012|  M|ET74 2SP|
+    |  4|    Lisa|      Marie|Simpson|09/05/2014|  F|ET74 2SP|
+    |  5|  Maggie|       null|Simpson|12/01/2021|  F|ET74 2SP|
+    +---+--------+-----------+-------+----------+---+--------+
 
     Example using null_counts:
-    > df.show()
 
+    >>> df.show()
     +----------+
     |      date|
     +----------+
@@ -1263,10 +1155,8 @@ def standardise_date(
     |1999/11/02|
     |2005-12-24|
     +----------+
-
-    >df,nulls = standardise_date(df,'date','yyyy/MM/dd','yyyy.MM.dd',True)
-
-    >df.show()
+    >>> df, nulls = standardise_date(df, "date", "yyyy/MM/dd", "yyyy.MM.dd", True)
+    >>> df.show()
     +----------+
     |      date|
     +----------+
@@ -1276,10 +1166,8 @@ def standardise_date(
     |1999.11.02|
     |      null|
     +----------+
-
-    >nulls
+    >>> nulls
     (0, 1)
-
     """
     if null_counts:
         null_before = df.where(F.col(col_name).isNull()).count()
@@ -1296,65 +1184,55 @@ def standardise_date(
         return df
 
 
-##############################################################################
-
-
-def fill_nulls(df, fill, subset=None):
-    """
-    Fills null and NaN with specified value
+def fill_nulls(
+    df: DataFrame, fill: str | None, subset: str | list[str] | None = None
+) -> DataFrame:
+    """Fill null and NaN with specified value.
 
     Parameters
     ----------
-    df : dataframe
-      Dataframe to which the function is applied.
-    fill: None or a string
-      This is the value the NaN/Null values are replaced by.
-      The data type of the fill value must match
-      that of the column it is replacing values within.
-    subset : default = None, string or list of strings
-      The subset is the column(s) on which the function is applied.
-      If None the function applies to the whole dataframe.
-
+    df : pyspark.sql.DataFrame
+        DataFrame to which the function is applied.
+    fill : str, optional
+        This is the value the NaN/Null values are replaced by. The data
+        type of the fill value must match that of the column it is
+        replacing values within.
+    subset : str | list[str], optional
+        The subset is the column(s) on which the function is applied. If
+        None the function applies to the whole DataFrame. Defaults to
+        None.
 
     Returns
     -------
-    dataframe
-      Dataframe with null/NaN values replaced from
-      the subset of columns.
+    pyspark.sql.DataFrame
+        DataFrame with null/NaN values replaced from the subset of
+        columns.
 
-    Raises
-    -------
-    None at present.
-
-    Example
-    -------
-    > df.show()
-
-    +---+--------+----------+-------+----------+---+--------+
-    | ID|Forename|Middlename|Surname|       DoB|Sex|Postcode|
-    +---+--------+----------+-------+----------+---+--------+
-    |  1|   Homer|      null|Simpson|1983-05-12|  M|ET74 2SP|
-    |  2|   Marge|      null|Simpson|1983-03-19|  F|ET74 2SP|
-    |  3|    Bart|      null|Simpson|2012-04-01|  M|ET74 2SP|
-    |  3|    Bart|     Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  4|    Lisa|     Marie|Simpson|2014-05-09|  F|ET74 2SP|
-    |  5|  Maggie|      null|Simpson|2021-01-12|  F|ET74 2SP|
-    +---+--------+----------+-------+----------+---+--------+
-
-    > fill_nulls(df, fill = 'donuts',subset=None).show()
-
-    +---+--------+----------+-------+----------+---+--------+
-    | ID|Forename|Middlename|Surname|       DoB|Sex|Postcode|
-    +---+--------+----------+-------+----------+---+--------+
-    |  1|   Homer|    donuts|Simpson|1983-05-12|  M|ET74 2SP|
-    |  2|   Marge|    donuts|Simpson|1983-03-19|  F|ET74 2SP|
-    |  3|    Bart|    donuts|Simpson|2012-04-01|  M|ET74 2SP|
-    |  3|    Bart|     Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  4|    Lisa|     Marie|Simpson|2014-05-09|  F|ET74 2SP|
-    |  5|  Maggie|    donuts|Simpson|2021-01-12|  F|ET74 2SP|
-    +---+--------+----------+-------+----------+---+--------+
+    Examples
+    --------
+    >>> df.show()
+    +---+--------+-----------+-------+----------+---+--------+
+    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|
+    +---+--------+-----------+-------+----------+---+--------+
+    |  1|   Homer|       null|Simpson|1983-05-12|  M|ET74 2SP|
+    |  2|   Marge|       null|Simpson|1983-03-19|  F|ET74 2SP|
+    |  3|    Bart|       null|Simpson|2012-04-01|  M|ET74 2SP|
+    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
+    |  4|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|
+    |  5|  Maggie|       null|Simpson|2021-01-12|  F|ET74 2SP|
+    +---+--------+-----------+-------+----------+---+--------+
+    >>> fill_nulls(df, fill="donuts", subset=None).show()
+    +---+--------+-----------+-------+----------+---+--------+
+    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|
+    +---+--------+-----------+-------+----------+---+--------+
+    |  1|   Homer|     donuts|Simpson|1983-05-12|  M|ET74 2SP|
+    |  2|   Marge|     donuts|Simpson|1983-03-19|  F|ET74 2SP|
+    |  3|    Bart|     donuts|Simpson|2012-04-01|  M|ET74 2SP|
+    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
+    |  4|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|
+    |  5|  Maggie|     donuts|Simpson|2021-01-12|  F|ET74 2SP|
+    +---+--------+-----------+-------+----------+---+--------+
     """
-
     if subset is None:
         subset = df.columns
 
@@ -1372,45 +1250,45 @@ def fill_nulls(df, fill, subset=None):
     return df
 
 
-################################################################################
+def age_at(
+    df: DataFrame,
+    reference_col: str,
+    in_date_format: str = "dd-MM-yyyy",
+    *age_at_dates: list[str],
+) -> DataFrame:
+    """Compute ages at given dates from a DOB column, adding columns.
 
+    Calculates individuals' ages at specified dates from a reference
+    Date of Birth column.
 
-def age_at(df, reference_col, in_date_format="dd-MM-yyyy", *age_at_dates):
-    """
-    Calculates individuals' ages at specified dates from a reference Date of Birth column
-
-    The function takes a list of dates, and for each date creates a new column
-    specifying an individual's age at that date.
+    The function takes a list of dates, and for each date creates a new
+    column specifying an individual's age at that date.
 
     Parameters
     ----------
-    df : dataframe
-      Dataframe to which the function is applied.
-    reference_column: string
-      The original date of birth column needed to calculate age.
-    in_date_format: default = 'dd-MM-yyyy',string
-      The date format of the date of birth column.
-      It uses hyphens or forward slashes to split the date
-      up and dd,MM,yyyy to show date month and year respectively.
-      e.g. 'dd-MM-yyyy' , 'dd/MM/yyyy', 'yyyy-MM-dd'.
-    *age_at_dates: list of strings
-      The list of dates at which the user wants to calculate ages. Any
-      number of dates can be given. The dates need to be in the
-      following format: 'yyyy-MM-dd'.
+    df : pyspark.sql.DataFrame
+        DataFrame to which the function is applied.
+    reference_column : str
+        The original date of birth column needed to calculate age.
+    in_date_format : str, optional
+        The date format of the date of birth column. It uses hyphens or
+        forward slashes to split the date up and dd,MM,yyyy to show date
+        month and year respectively. eg 'dd-MM-yyyy' , 'dd/MM/yyyy',
+        'yyyy-MM-dd'. Defaults to "dd-MM-yyyy".
+    age_at_dates : list[str]
+        The list of dates at which the user wants to calculate ages. Any
+        number of dates can be given. The dates need to be in the
+        following format: 'yyyy-MM-dd'.
 
     Returns
     -------
-    dataframe
-      Returns the complete dataframe with additional column(s)
-      giving age at specified date(s).
+    pyspark.sql.DataFrame
+        Returns the complete DataFrame with additional column(s) giving
+        age at specified date(s).
 
-    Raises
-    -------
-    None at present.
-
-    Example
-    -------
-    > df.show()
+    Examples
+    --------
+    >>> df.show()
     +---+--------+-------+----------+---+
     | ID|Forename|Surname|       DoB|Sex|
     +---+--------+-------+----------+---+
@@ -1421,9 +1299,8 @@ def age_at(df, reference_col, in_date_format="dd-MM-yyyy", *age_at_dates):
     |  4|    Lisa|Simpson|2014-05-09|  F|
     |  5|  Maggie|Simpson|2021-01-12|  F|
     +---+--------+-------+----------+---+
-
-    > dates = ['2022-11-03','2020-12-25']
-    > age_at(df,'DoB','yyyy-MM-dd',*dates).show()
+    >>> dates = ["2022-11-03", "2020-12-25"]
+    >>> age_at(df, "DoB", "yyyy-MM-dd", *dates).show()
     +---+--------+-------+----------+---+---------------------+---------------------+
     | ID|Forename|Surname|       DoB|Sex|DoB_age_at_2022-11-03|DoB_age_at_2020-12-25|
     +---+--------+-------+----------+---+---------------------+---------------------+
@@ -1434,9 +1311,7 @@ def age_at(df, reference_col, in_date_format="dd-MM-yyyy", *age_at_dates):
     |  4|    Lisa|Simpson|2014-05-09|  F|                    8|                    6|
     |  5|  Maggie|Simpson|2021-01-12|  F|                    1|                    0|
     +---+--------+-------+----------+---+---------------------+---------------------+
-
     """
-
     df = df.withColumn(
         f"{reference_col}_fmt", F.unix_timestamp(F.col(reference_col), in_date_format)
     ).withColumn(
