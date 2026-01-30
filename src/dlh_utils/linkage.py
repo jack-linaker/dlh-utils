@@ -82,368 +82,44 @@ def alpha_name(df: DataFrame, input_col: str, output_col: str) -> DataFrame:
     return df
 
 
-def metaphone(df: DataFrame, input_col: str, output_col: str) -> DataFrame:
-    """Generate the metaphone phonetic encoding of a string.
+def assert_unique(df: DataFrame, column: str | list[str]) -> None:
+    """Assert DataFrame has one row per unique identifier.
+
+    Asserts whether a DataFrame contains only one instance of each
+    unique identifier, specified by the ``column`` argument.
+    """
+    if not isinstance(column, list):
+        column = [column]
+
+    assert df.count() == df.dropDuplicates(subset=column).count()
+
+
+def assert_unique_matches(linked_ids: DataFrame, *identifier_col: str) -> None:
+    """Assert linkage results form unique one-to-one record matches.
+
+    Asserts that all linkage results are unique (ie that there is 1:1
+    relationship between matched records).
+
+    Note: This will return an AssertError if linkage results are not
+    unique.
 
     Parameters
     ----------
-    df : pyspark.sql.DataFrame
-        A DataFrame containing an input column.
-    input_col : str
-        Name of column to create metaphone encoding on.
-    output_col : str
-        Name of column to be output.
-
-    Returns
-    -------
-    pyspark.sql.DataFrame
-        A df with output_col appended
-
-    Examples
-    --------
-    >>> metaphone(df, "Forename", "forename_metaphone").show()
-    +---+---------+------------------+
-    | ID| Forename|forename_metaphone|
-    +---+---------+------------------+
-    |  1|    David|               TFT|
-    |  2|  Idrissa|              ITRS|
-    |  3|   Edward|             ETWRT|
-    |  4|   Gordon|              KRTN|
-    |  5|     Emma|                EM|
-    +---+---------+------------------+
+    linked_ids : pyspark.sql.DataFrame
+        Linked DataFrame that includes unique identifier columns.
+    identifier_col : str
+        Column name(s) of unique identifiers in linked data.
     """
-
-    @F.udf(returnType=StringType())
-    def meta(_string):
-        return None if _string is None else jellyfish.metaphone(_string)
-
-    df = df.withColumn(output_col, meta(F.col(input_col)))
-
-    return df
-
-
-def soundex(df: DataFrame, input_col: str, output_col: str) -> DataFrame:
-    """Generate the soundex phonetic encoding of a string.
-
-    Parameters
-    ----------
-    df : pyspark.sql.DataFrame
-        A DataFrame containing an input column.
-    input_col : str
-        Name of column to create soundex encoding on.
-    output_col : str
-        Name of column to be output.
-
-    Returns
-    -------
-    pyspark.sql.DataFrame
-        A df with output_col appended.
-
-    Examples
-    --------
-    >>> df.show()
-    +---+--------+
-    | ID|Forename|
-    +---+--------+
-    |  1|   Homer|
-    |  2|   Marge|
-    |  3|    Bart|
-    |  4|    Lisa|
-    |  5|  Maggie|
-    +---+--------+
-    >>> soundex(df, "Forename", "forename_soundex").show()
-    +---+--------+----------------+
-    | ID|Forename|forename_soundex|
-    +---+--------+----------------+
-    |  1|   Homer|            H560|
-    |  2|   Marge|            M620|
-    |  3|    Bart|            B630|
-    |  4|    Lisa|            L200|
-    |  5|  Maggie|            M200|
-    +---+--------+----------------+
-    """
-    df = df.withColumn(output_col, F.soundex(input_col))
-    return df
-
-
-def std_lev_score(string1: str, string2: str) -> Column:
-    """Compute Levenshtein similarity score between two strings.
-
-    Applies the standardised levenshtein string similarity function to
-    two strings to return a score between 0 and 1.
-
-    This function works at the column level, and so needs to either be
-    applied to two forename columns in an already-linked dataset, or as
-    a join condition in a match key. See example for both scenarios
-    outlined.
-
-    Parameters
-    ----------
-    string1 : str
-        String to be compared to ``string2``.
-    string2 : str
-        String to be compared to ``string1``.
-
-    Returns
-    -------
-    Column
-        A column containing a similarity score between 0 and 1.
-
-    Examples
-    --------
-    For a pre-joined dataset:
-
-    >>> df.show()
-    +---+--------+----------+
-    | ID|Forename|Forename_2|
-    +---+--------+----------+
-    |  1|   Homer|  Milhouse|
-    |  2|   Marge|  Milhouse|
-    |  3|    Bart|  Milhouse|
-    |  4|    Lisa|  Milhouse|
-    |  5|  Maggie|  Milhouse|
-    +---+--------+----------+
-    >>> df = df.withColumn(
-    ...     "forename_lev", std_lev_score(F.col("Forename"), F.col("Forename_2"))
-    ... )
-    +---+--------+----------+------------+
-    | ID|Forename|Forename_2|forename_lev|
-    +---+--------+----------+------------+
-    |  1|   Homer|  Milhouse|       0.125|
-    |  2|   Marge|  Milhouse|        0.25|
-    |  3|    Bart|  Milhouse|         0.0|
-    |  4|    Lisa|  Milhouse|        0.25|
-    |  5|  Maggie|  Milhouse|        0.25|
-    +---+--------+----------+------------+
-
-    Used in a matchkey:
-
-    >>> mk = [
-    ...     std_lev_score(F.col("First_Name_cen"), F.col("First_Name_ccs")) > 0.7,
-    ...     CEN.Last_Name_cen == CCS.Last_Name_ccs,
-    ...     CEN.Sex_cen == CCS.Sex_ccs,
-    ...     CEN.Resident_Age_cen == CCS.Resident_Age_ccs,
-    ...     CEN.Postcode_cen == CCS.Postcode_ccs,
-    ... ]
-    >>> links = deterministic_linkage(
-    ...     df_l=CEN,
-    ...     df_r=CCS,
-    ...     id_l="Resident_ID_cen",
-    ...     id_r="Resident_ID_ccs",
-    ...     matchkeys=mk,
-    ...     out_dir="/some_path/links",
-    ... )
-    """
-    return 1 - (
-        (F.levenshtein(string1, string2))
-        / F.greatest(F.length(string1), F.length(string2))
-    )
-
-
-@F.udf(FloatType())
-def jaro(string1: str | None, string2: str | None) -> float | None:
-    """Compute Jaro similarity score between two strings.
-
-    Applies the Jaro string similarity function to two strings and
-    calculates a score between 0 and 1.
-
-    This function works at the column level, and so needs to either be
-    applied to two forename columns in an already-linked dataset, or as
-    a join condition in a matchkey. See example for both scenarios
-    outlined.
-
-    Parameters
-    ----------
-    string1 : str, optional
-        String to be compared to ``string2``.
-    string2 : str, optional
-        String to be compared to ``string1``.
-
-    Returns
-    -------
-    float | None
-        Similarity score between 0 and 1.
-
-    Examples
-    --------
-    For a pre-joined dataset:
-
-    >>> df.show()
-    +---+--------+----------+
-    | ID|Forename|Forename_2|
-    +---+--------+----------+
-    |  1|   Homer|      John|
-    |  2|   Marge|      John|
-    |  3|    Bart|      John|
-    |  4|    Lisa|      John|
-    |  5|  Maggie|      John|
-    +---+--------+----------+
-    >>> df = df.withColumn(
-    ...     "Forename_jaro", jaro(F.col("Forename"), F.col("Forename_2"))
-    ... )
-    >>> df.show()
-    +---+--------+----------+-------------+
-    | ID|Forename|Forename_2|Forename_jaro|
-    +---+--------+----------+-------------+
-    |  1|   Homer|      John|   0.48333332|
-    |  2|   Marge|      John|          0.0|
-    |  3|    Bart|      John|          0.0|
-    |  4|    Lisa|      John|          0.0|
-    |  5|  Maggie|      John|          0.0|
-    +---+--------+----------+-------+-----+
-
-    Used in a matchkey:
-
-    >>> mk = [
-    ...     jaro(F.col("First_Name_cen"), F.col("First_Name_ccs")) > 0.7,
-    ...     CEN.Last_Name_cen == CCS.Last_Name_ccs,
-    ...     CEN.Sex_cen == CCS.Sex_ccs,
-    ...     CEN.Resident_Age_cen == CCS.Resident_Age_ccs,
-    ...     CEN.Postcode_cen == CCS.Postcode_ccs,
-    ... ]
-    >>> links = deterministic_linkage(
-    ...     df_l=CEN,
-    ...     df_r=CCS,
-    ...     id_l="Resident_ID_cen",
-    ...     id_r="Resident_ID_ccs",
-    ...     matchkeys=mk,
-    ...     out_dir="/some_path/links",
-    ... )
-    """
-    return (
-        jellyfish.jaro_similarity(string1, string2)
-        if string1 is not None and string2 is not None
-        else None
-    )
-
-
-@F.udf(FloatType())
-def jaro_winkler(string1: str | None, string2: str | None) -> float | None:
-    """Compute Jaro-Winkler similarity score between two strings.
-
-    Applies the Jaro Winkler string similarity function to two strings
-    and calculates a score between 0 and 1.
-
-    This function works at the column level, and so needs to either be
-    applied to two forename columns in an already-linked dataset, or as
-    a join condition in a matchkey. See example for both scenarios
-    outlined.
-
-    Parameters
-    ----------
-    string1 : str
-        String to be compared to ``string2``.
-    string2 : str
-        String to be compared to ``string1``.
-
-    Returns
-    -------
-    float | None
-        Similarity score between 0 and 1.
-
-    Examples
-    --------
-    >>> df.show()
-    +---+---------+----------+
-    | ID| Forename|Forename_2|
-    +---+---------+----------+
-    |  1|    David|     Emily|
-    |  2|  Idrissa|     Emily|
-    |  3|   Edward|     Emily|
-    |  4|   Gordon|     Emily|
-    |  5|     Emma|     Emily|
-    +---+---------+----------+
-    >>> df = df.withColumn(
-    ...     "fnjaro_winkler", jaro_winkler(F.col("Forename"), F.col("Forename_2"))
-    ... )
-    +---+---------+----------+--------------+
-    | ID| Forename|Forename_2|fnjaro_winkler|
-    +---+---------+----------+--------------+
-    |  1|    David|     Emily|    0.46666667|
-    |  2|  Idrissa|     Emily|    0.44761905|
-    |  3|   Edward|     Emily|    0.45555556|
-    |  4|   Gordon|     Emily|           0.0|
-    |  5|     Emma|     Emily|     0.6333333|
-    +---+---------+----------+--------------+
-
-    >>> mk = [
-    ...     jaro_winkler(F.col("First_Name_cen"), F.col("First_Name_ccs")) > 0.7,
-    ...     CEN.Last_Name_cen == CCS.Last_Name_ccs,
-    ...     CEN.Sex_cen == CCS.Sex_ccs,
-    ...     CEN.Resident_Age_cen == CCS.Resident_Age_ccs,
-    ...     CEN.Postcode_cen == CCS.Postcode_ccs,
-    ... ]
-    >>> links = deterministic_linkage(
-    ...     df_l=CEN,
-    ...     df_r=CCS,
-    ...     id_l="Resident_ID_cen",
-    ...     id_r="Resident_ID_ccs",
-    ...     matchkeys=mk,
-    ...     out_dir="/user/username/cen_ccs_links",
-    ... )
-    """
-    return (
-        jellyfish.jaro_winkler_similarity(string1, string2)
-        if string1 is not None and string2 is not None
-        else None
-    )
-
-
-@F.udf(FloatType())
-def difflib_sequence_matcher(string1: str | None, string2: str | None) -> float | None:
-    """Compute SequenceMatcher similarity score for two strings.
-
-    Applies the difflib.SequenceMatcher ratio() function to get the
-    distance between two strings and calculates a score between 0 and 1
-    (1.0 if the sequences are identical, 0.0 if they do not have
-    anything in common).
-
-    This function works at the column level, and so needs to either be
-    applied to two forename columns in an already-linked dataset, or as
-    a join condition in a matchkey.
-
-    Parameters
-    ----------
-    string1 : str
-        String to be compared to ``string2``.
-    string2 : str
-        String to be compared to ``string1``.
-
-    Returns
-    -------
-    float | None
-        Similarity score between 0 and 1.
-
-    Examples
-    --------
-    >>> df.show()
-    +---+---------+----------+
-    | ID| Forename|Forename_2|
-    +---+---------+----------+
-    |  1|    David|     Emily|
-    |  2|  Idrissa|     Emily|
-    |  3|   Edward|     Emily|
-    |  4|   Gordon|     Emily|
-    |  5|     Emma|     Emily|
-    +---+---------+----------+
-    >>> df = df.withColumn(
-    ...     "sequence_matcher",
-    ...     difflib_sequence_matcher(F.col("Forename"), F.col("Forename_2")),
-    ... )
-    +---+---------+----------+----------------+
-    | ID| Forename|Forename_2|sequence_matcher|
-    +---+---------+----------+----------------+
-    |  1|    David|     Emily|             0.2|
-    |  2|  Idrissa|     Emily|      0.16666667|
-    |  3|   Edward|     Emily|      0.18181819|
-    |  4|   Gordon|     Emily|             0.0|
-    |  5|     Emma|     Emily|      0.44444445|
-    +---+---------+----------+----------------+
-    """
-    if string1 is None or string2 is None:
-        return None
-
-    return SequenceMatcher(a=string1, b=string2).ratio()
+    for column in identifier_col:
+        assert (
+            (
+                linked_ids.groupBy(column)
+                .count()
+                .select(F.max(F.col("count")))
+                .collect()[0][0]
+            )
+            == 1
+        )
 
 
 def blocking(
@@ -516,6 +192,88 @@ def blocking(
             )
 
     return combined_blocks
+
+
+def clerical_sample(
+    linked_ids: DataFrame,
+    mk_df: DataFrame,
+    df_l: DataFrame,
+    df_r: DataFrame,
+    id_l: str,
+    id_r: str,
+    n_ids: int = 100,
+) -> DataFrame:
+    """Join linked IDs to raw data and sample matches by matchkey.
+
+    Suffixes left and right dataframes with specified suffix. Joins raw
+    data to linked identifier output of deterministic linkage. Returns a
+    number of examples for each matchkey as specified.
+
+    Parameters
+    ----------
+    linked_ids : pyspark.sql.DataFrame
+        DataFrame returned by deterministic_linkage(). This will include
+        variables: left identifier; right identifier and matchkey
+        number.
+    mk_df : pyspark.sql.DataFrame
+        DataFrame returned by matchkey_dataframe(). This will include
+        matchkey number and description.
+    df_l : pyspark.sql.DataFrame
+        Left DataFrame to be joined.
+    df_r : pyspark.sql.DataFrame
+        Right DataFrame to be joined.
+    id_l : str
+        Variable name of column containing left unique identifier.
+    id_r : str
+        Variable name of column containing right unique identifier.
+    n_ids : int, optional
+        The number of identifier pairs sampled for each matchkey.
+        Defaults to 100.
+
+    Returns
+    -------
+    pyspark.sql.DataFrame
+        DataFrame of deterministic linkage samples by matchkey.
+
+    See Also
+    --------
+    dataframes.union_all()
+    """
+    mks = sorted(
+        [x[0] for x in linked_ids.select("matchkey").dropDuplicates().collect()]
+    )
+
+    linked_ids = linked_ids.withColumn("random", F.rand()).sort("random").drop("random")
+
+    linked_ids = [
+        (
+            linked_ids.where(F.col("matchkey") == mk)
+            .select("matchkey", id_l, id_r)
+            .dropDuplicates()
+            .limit(n_ids)
+        )
+        for mk in mks
+    ]
+
+    linked_ids = da.union_all(*linked_ids)
+
+    review_df = (
+        linked_ids.join(df_l, id_l, "inner")
+        .join(df_r, id_r, "inner")
+        .join(mk_df, on="matchkey")
+        .sort("matchkey", id_l)
+    )
+
+    lead_columns = ["matchkey", id_l, id_r]
+    end_columns = ["description"]
+
+    review_df = review_df.select(
+        lead_columns
+        + sorted([x for x in review_df.columns if x not in lead_columns + end_columns])
+        + end_columns
+    )
+
+    return review_df
 
 
 def cluster_number(df: DataFrame, id_1: str, id_2: str) -> DataFrame | None:
@@ -643,370 +401,6 @@ def cluster_number(df: DataFrame, id_1: str, id_2: str) -> DataFrame | None:
         spark.conf.set('spark.jars', path_to_jar_file) or by starting a
         SparkSession from the sessions module of dlh_utils
         """)
-
-
-def extract_mk_variables(df: DataFrame, match_key: list) -> list:
-    """Extract variables from matchkey join condition.
-
-    For example, would return ["first_name", "last_name",
-    "date_of_birth"] for a matchkey using these components. Used in
-    mk_drop(na) to exclude instances of null in any matchkey component
-    columns.
-
-    Parameters
-    ----------
-    df : pyspark.sql.DataFrame
-        DataFrame the to which matchkeys will be applied.
-    match_key : list
-        The join conditions as specified in matchkey
-
-    Returns
-    -------
-    list
-        List of components included in matchkey.
-    """
-    mk_variables = re.split("[^a-zA-Z0-9_]", str(match_key))
-    mk_variables = [x for x in mk_variables if x in df.columns]
-    mk_variables = list(set(mk_variables))
-
-    return mk_variables
-
-
-def mk_dropna(df: DataFrame, match_key: list) -> DataFrame:
-    """Drop rows with nulls in matchkey join columns.
-
-    Drops null values in variables included in matchkeys join
-    conditions.
-
-    Improves efficiency of join by excluding records containing nulls in
-    matchkey component columns as these records would not match. Also
-    avoids skew resulting from nulls. Used in order_matchkeys() and
-    matchkey_join().
-
-    Parameters
-    ----------
-    df : pyspark.sql.DataFrame
-        DataFrame the to which matchkeys will be applied.
-    match_key : list
-        A list of join conditions (as specified in a matchkey(s)).
-
-    Returns
-    -------
-    pyspark.sql.DataFrame
-        DataFrame with null values dropped from matchkey component
-        variables.
-
-    See Also
-    --------
-    extract_mk_variables()
-    """
-    variables = extract_mk_variables(df, match_key)
-
-    df = df.dropna(subset=variables)
-
-    return df
-
-
-def order_matchkeys(
-    df_l: DataFrame, df_r: DataFrame, mks: list, chunk: int = 10
-) -> DataFrame:
-    """Order matchkeys by ascending number of matches.
-
-    Orders matchkey components based on the number of matches made by
-    each matchkey in ascending order
-
-    Parameters
-    ----------
-    df_l : pyspark.sql.DataFrame
-        Left DataFrame to which matchkeys will be applied.
-    df_r : pyspark.sql.DataFrame
-        Right DataFrame to which matchkeys will be applied.
-    mks : list
-        A list of join conditions (as specified in a matchkey(s)).
-    chunk : int, optional
-        Defaults to 10.
-
-    Returns
-    -------
-    pyspark.sql.DataFrame
-        DataFrame with null values dropped from matchkey component
-        variables.
-    """
-    mk_order = pd.DataFrame(
-        {"mks": mks, "supplied_order": [mk_n for mk_n, mk in enumerate(mks)]}
-    )
-
-    mks = ut.chunk_list(mks, chunk)
-
-    mk_counts = pd.DataFrame(columns=["supplied_order", "count"])
-
-    chunk_n = 0 - chunk
-
-    for mk_chunk in mks:
-        chunk_n += chunk
-
-        df = da.union_all(
-            *[
-                (
-                    mk_dropna(df_l, mk)
-                    .join(mk_dropna(df_r, mk), on=mk, how="inner")
-                    .withColumn("supplied_order", F.lit(mk_n + chunk_n))
-                    .select("supplied_order")
-                )
-                for mk_n, mk in enumerate(mk_chunk)
-            ]
-        )
-
-        df = df.groupBy("supplied_order").count().toPandas()
-
-        mk_counts = mk_counts.append(df).reset_index(drop=True)
-
-    mk_order = mk_order.merge(mk_counts, on="supplied_order").sort_values("count")
-
-    mk_order = list(mk_order["mks"])
-
-    return mk_order
-
-
-def matchkey_join(
-    df_l: DataFrame,
-    df_r: DataFrame,
-    id_l: str,
-    id_r: str,
-    match_key: list,
-    mk_n: int = 0,
-) -> DataFrame:
-    """Join DataFrames on matchkey retaining only 1:1 matches.
-
-    Joins left and right DataFrames on specified matchkey. Retains only
-    instances of 1:1 matches between left and right identifiers (i.e.
-    where matches are unique and there is only one match candidate for
-    each left and right identifier). Adds 'matchkey' column to record
-    matchkey number.
-
-    Parameters
-    ----------
-    df_l : pyspark.sql.DataFrame
-        Left DataFrame to be joined.
-    df_r : pyspark.sql.DataFrame
-        Right DataFrame to be joined.
-    id_l : str
-        Variable name of column containing left unique identifier.
-    id_r : str
-        Variable name of column containing right unique identifier.
-    match_key : list
-        Matchkey join conditions.
-    mk_n : int
-        Matchkey number (order of application).
-
-    Returns
-    -------
-    pyspark.sql.DataFrame
-        DataFrame of unique 1:1 joins on left and right DataFrame.
-        Retaining only left and right identifiers and matchkey number.
-
-    See Also
-    --------
-    mk_dropna()
-    """
-    df_l = mk_dropna(df_l, match_key)
-    df_r = mk_dropna(df_r, match_key)
-
-    df = (
-        df_l.join(df_r, match_key, "inner")
-        .select(id_l, id_r)
-        .dropDuplicates()
-        .withColumn("matchkey", F.lit(mk_n))
-    )
-
-    df = da.filter_window(df, id_r, id_l, "count", 1)
-    df = da.filter_window(df, id_l, id_r, "count", 1)
-
-    return df
-
-
-def matchkey_dataframe(mks: list) -> DataFrame:
-    """Create DataFrame of matchkeys and descriptions.
-
-    Takes a list of matchkeys. Assigns numbers to matchkeys based on
-    order in list provided. Adds description of each matchkey from
-    string manipulation of join condition.
-
-    Parameters
-    ----------
-    mks : list
-        List of matchkeys.
-
-    Returns
-    -------
-    pyspark.sql.DataFrame
-        DataFrame of matchkeys and descriptions.
-    """
-    spark = SparkSession.builder.getOrCreate()
-
-    mk_df = spark.createDataFrame(
-        pd.DataFrame(
-            {
-                "matchkey": [x for x, y in enumerate(mks, 1)],
-                "description": [str(x) for x in mks],
-            }
-        )[["matchkey", "description"]]
-    ).withColumn(
-        "description",
-        F.regexp_replace(
-            F.col("description"),
-            "(?:Column[<]b['])|(?:['][>][,] \
-                 Column[<]b['])|(?:['][>])| ",
-            "",
-        ),
-    )
-
-    return mk_df
-
-
-def assert_unique_matches(linked_ids: DataFrame, *identifier_col: str) -> None:
-    """Assert linkage results form unique one-to-one record matches.
-
-    Asserts that all linkage results are unique (ie that there is 1:1
-    relationship between matched records).
-
-    Note: This will return an AssertError if linkage results are not
-    unique.
-
-    Parameters
-    ----------
-    linked_ids : pyspark.sql.DataFrame
-        Linked DataFrame that includes unique identifier columns.
-    identifier_col : str
-        Column name(s) of unique identifiers in linked data.
-    """
-    for column in identifier_col:
-        assert (
-            (
-                linked_ids.groupBy(column)
-                .count()
-                .select(F.max(F.col("count")))
-                .collect()[0][0]
-            )
-            == 1
-        )
-
-
-def assert_unique(df: DataFrame, column: str | list[str]) -> None:
-    """Assert DataFrame has one row per unique identifier.
-
-    Asserts whether a DataFrame contains only one instance of each
-    unique identifier, specified by the ``column`` argument.
-    """
-    if not isinstance(column, list):
-        column = [column]
-
-    assert df.count() == df.dropDuplicates(subset=column).count()
-
-
-def matchkey_counts(linked_df: DataFrame) -> DataFrame:
-    """Count number of links made on each matchkey.
-
-    Returns DataFrame of matchkey number and the number of matches made
-    on each matchkey.
-
-    Parameters
-    ----------
-    linked_df : pyspark.sql.DataFrame
-        DataFrame returned by deterministic_linkage(). This will include
-        variables: left identifier; right identifier and matchkey number
-
-    Returns
-    -------
-    pyspark.sql.DataFrame
-        DataFrame of counts of matches achieved by matchkey number.
-    """
-    return linked_df.groupBy("matchkey").count().sort("count", ascending=False)
-
-
-###############################################################################
-
-
-def clerical_sample(
-    linked_ids: DataFrame,
-    mk_df: DataFrame,
-    df_l: DataFrame,
-    df_r: DataFrame,
-    id_l: str,
-    id_r: str,
-    n_ids: int = 100,
-) -> DataFrame:
-    """Join linked IDs to raw data and sample matches by matchkey.
-
-    Suffixes left and right dataframes with specified suffix. Joins raw
-    data to linked identifier output of deterministic linkage. Returns a
-    number of examples for each matchkey as specified.
-
-    Parameters
-    ----------
-    linked_ids : pyspark.sql.DataFrame
-        DataFrame returned by deterministic_linkage(). This will include
-        variables: left identifier; right identifier and matchkey
-        number.
-    mk_df : pyspark.sql.DataFrame
-        DataFrame returned by matchkey_dataframe(). This will include
-        matchkey number and description.
-    df_l : pyspark.sql.DataFrame
-        Left DataFrame to be joined.
-    df_r : pyspark.sql.DataFrame
-        Right DataFrame to be joined.
-    id_l : str
-        Variable name of column containing left unique identifier.
-    id_r : str
-        Variable name of column containing right unique identifier.
-    n_ids : int, optional
-        The number of identifier pairs sampled for each matchkey.
-        Defaults to 100.
-
-    Returns
-    -------
-    pyspark.sql.DataFrame
-        DataFrame of deterministic linkage samples by matchkey.
-
-    See Also
-    --------
-    dataframes.union_all()
-    """
-    mks = sorted(
-        [x[0] for x in linked_ids.select("matchkey").dropDuplicates().collect()]
-    )
-
-    linked_ids = linked_ids.withColumn("random", F.rand()).sort("random").drop("random")
-
-    linked_ids = [
-        (
-            linked_ids.where(F.col("matchkey") == mk)
-            .select("matchkey", id_l, id_r)
-            .dropDuplicates()
-            .limit(n_ids)
-        )
-        for mk in mks
-    ]
-
-    linked_ids = da.union_all(*linked_ids)
-
-    review_df = (
-        linked_ids.join(df_l, id_l, "inner")
-        .join(df_r, id_r, "inner")
-        .join(mk_df, on="matchkey")
-        .sort("matchkey", id_l)
-    )
-
-    lead_columns = ["matchkey", id_l, id_r]
-    end_columns = ["description"]
-
-    review_df = review_df.select(
-        lead_columns
-        + sorted([x for x in review_df.columns if x not in lead_columns + end_columns])
-        + end_columns
-    )
-
-    return review_df
 
 
 def deduplicate(
@@ -1267,3 +661,606 @@ def deterministic_linkage(
     print("right residual: ", df_r_count - count)
 
     return matches
+
+
+@F.udf(FloatType())
+def difflib_sequence_matcher(string1: str | None, string2: str | None) -> float | None:
+    """Compute SequenceMatcher similarity score for two strings.
+
+    Applies the difflib.SequenceMatcher ratio() function to get the
+    distance between two strings and calculates a score between 0 and 1
+    (1.0 if the sequences are identical, 0.0 if they do not have
+    anything in common).
+
+    This function works at the column level, and so needs to either be
+    applied to two forename columns in an already-linked dataset, or as
+    a join condition in a matchkey.
+
+    Parameters
+    ----------
+    string1 : str
+        String to be compared to ``string2``.
+    string2 : str
+        String to be compared to ``string1``.
+
+    Returns
+    -------
+    float | None
+        Similarity score between 0 and 1.
+
+    Examples
+    --------
+    >>> df.show()
+    +---+---------+----------+
+    | ID| Forename|Forename_2|
+    +---+---------+----------+
+    |  1|    David|     Emily|
+    |  2|  Idrissa|     Emily|
+    |  3|   Edward|     Emily|
+    |  4|   Gordon|     Emily|
+    |  5|     Emma|     Emily|
+    +---+---------+----------+
+    >>> df = df.withColumn(
+    ...     "sequence_matcher",
+    ...     difflib_sequence_matcher(F.col("Forename"), F.col("Forename_2")),
+    ... )
+    +---+---------+----------+----------------+
+    | ID| Forename|Forename_2|sequence_matcher|
+    +---+---------+----------+----------------+
+    |  1|    David|     Emily|             0.2|
+    |  2|  Idrissa|     Emily|      0.16666667|
+    |  3|   Edward|     Emily|      0.18181819|
+    |  4|   Gordon|     Emily|             0.0|
+    |  5|     Emma|     Emily|      0.44444445|
+    +---+---------+----------+----------------+
+    """
+    if string1 is None or string2 is None:
+        return None
+
+    return SequenceMatcher(a=string1, b=string2).ratio()
+
+
+def extract_mk_variables(df: DataFrame, match_key: list) -> list:
+    """Extract variables from matchkey join condition.
+
+    For example, would return ["first_name", "last_name",
+    "date_of_birth"] for a matchkey using these components. Used in
+    mk_drop(na) to exclude instances of null in any matchkey component
+    columns.
+
+    Parameters
+    ----------
+    df : pyspark.sql.DataFrame
+        DataFrame the to which matchkeys will be applied.
+    match_key : list
+        The join conditions as specified in matchkey
+
+    Returns
+    -------
+    list
+        List of components included in matchkey.
+    """
+    mk_variables = re.split("[^a-zA-Z0-9_]", str(match_key))
+    mk_variables = [x for x in mk_variables if x in df.columns]
+    mk_variables = list(set(mk_variables))
+
+    return mk_variables
+
+
+@F.udf(FloatType())
+def jaro(string1: str | None, string2: str | None) -> float | None:
+    """Compute Jaro similarity score between two strings.
+
+    Applies the Jaro string similarity function to two strings and
+    calculates a score between 0 and 1.
+
+    This function works at the column level, and so needs to either be
+    applied to two forename columns in an already-linked dataset, or as
+    a join condition in a matchkey. See example for both scenarios
+    outlined.
+
+    Parameters
+    ----------
+    string1 : str, optional
+        String to be compared to ``string2``.
+    string2 : str, optional
+        String to be compared to ``string1``.
+
+    Returns
+    -------
+    float | None
+        Similarity score between 0 and 1.
+
+    Examples
+    --------
+    For a pre-joined dataset:
+
+    >>> df.show()
+    +---+--------+----------+
+    | ID|Forename|Forename_2|
+    +---+--------+----------+
+    |  1|   Homer|      John|
+    |  2|   Marge|      John|
+    |  3|    Bart|      John|
+    |  4|    Lisa|      John|
+    |  5|  Maggie|      John|
+    +---+--------+----------+
+    >>> df = df.withColumn(
+    ...     "Forename_jaro", jaro(F.col("Forename"), F.col("Forename_2"))
+    ... )
+    >>> df.show()
+    +---+--------+----------+-------------+
+    | ID|Forename|Forename_2|Forename_jaro|
+    +---+--------+----------+-------------+
+    |  1|   Homer|      John|   0.48333332|
+    |  2|   Marge|      John|          0.0|
+    |  3|    Bart|      John|          0.0|
+    |  4|    Lisa|      John|          0.0|
+    |  5|  Maggie|      John|          0.0|
+    +---+--------+----------+-------+-----+
+
+    Used in a matchkey:
+
+    >>> mk = [
+    ...     jaro(F.col("First_Name_cen"), F.col("First_Name_ccs")) > 0.7,
+    ...     CEN.Last_Name_cen == CCS.Last_Name_ccs,
+    ...     CEN.Sex_cen == CCS.Sex_ccs,
+    ...     CEN.Resident_Age_cen == CCS.Resident_Age_ccs,
+    ...     CEN.Postcode_cen == CCS.Postcode_ccs,
+    ... ]
+    >>> links = deterministic_linkage(
+    ...     df_l=CEN,
+    ...     df_r=CCS,
+    ...     id_l="Resident_ID_cen",
+    ...     id_r="Resident_ID_ccs",
+    ...     matchkeys=mk,
+    ...     out_dir="/some_path/links",
+    ... )
+    """
+    return (
+        jellyfish.jaro_similarity(string1, string2)
+        if string1 is not None and string2 is not None
+        else None
+    )
+
+
+@F.udf(FloatType())
+def jaro_winkler(string1: str | None, string2: str | None) -> float | None:
+    """Compute Jaro-Winkler similarity score between two strings.
+
+    Applies the Jaro Winkler string similarity function to two strings
+    and calculates a score between 0 and 1.
+
+    This function works at the column level, and so needs to either be
+    applied to two forename columns in an already-linked dataset, or as
+    a join condition in a matchkey. See example for both scenarios
+    outlined.
+
+    Parameters
+    ----------
+    string1 : str
+        String to be compared to ``string2``.
+    string2 : str
+        String to be compared to ``string1``.
+
+    Returns
+    -------
+    float | None
+        Similarity score between 0 and 1.
+
+    Examples
+    --------
+    >>> df.show()
+    +---+---------+----------+
+    | ID| Forename|Forename_2|
+    +---+---------+----------+
+    |  1|    David|     Emily|
+    |  2|  Idrissa|     Emily|
+    |  3|   Edward|     Emily|
+    |  4|   Gordon|     Emily|
+    |  5|     Emma|     Emily|
+    +---+---------+----------+
+    >>> df = df.withColumn(
+    ...     "fnjaro_winkler", jaro_winkler(F.col("Forename"), F.col("Forename_2"))
+    ... )
+    +---+---------+----------+--------------+
+    | ID| Forename|Forename_2|fnjaro_winkler|
+    +---+---------+----------+--------------+
+    |  1|    David|     Emily|    0.46666667|
+    |  2|  Idrissa|     Emily|    0.44761905|
+    |  3|   Edward|     Emily|    0.45555556|
+    |  4|   Gordon|     Emily|           0.0|
+    |  5|     Emma|     Emily|     0.6333333|
+    +---+---------+----------+--------------+
+
+    >>> mk = [
+    ...     jaro_winkler(F.col("First_Name_cen"), F.col("First_Name_ccs")) > 0.7,
+    ...     CEN.Last_Name_cen == CCS.Last_Name_ccs,
+    ...     CEN.Sex_cen == CCS.Sex_ccs,
+    ...     CEN.Resident_Age_cen == CCS.Resident_Age_ccs,
+    ...     CEN.Postcode_cen == CCS.Postcode_ccs,
+    ... ]
+    >>> links = deterministic_linkage(
+    ...     df_l=CEN,
+    ...     df_r=CCS,
+    ...     id_l="Resident_ID_cen",
+    ...     id_r="Resident_ID_ccs",
+    ...     matchkeys=mk,
+    ...     out_dir="/user/username/cen_ccs_links",
+    ... )
+    """
+    return (
+        jellyfish.jaro_winkler_similarity(string1, string2)
+        if string1 is not None and string2 is not None
+        else None
+    )
+
+
+def matchkey_counts(linked_df: DataFrame) -> DataFrame:
+    """Count number of links made on each matchkey.
+
+    Returns DataFrame of matchkey number and the number of matches made
+    on each matchkey.
+
+    Parameters
+    ----------
+    linked_df : pyspark.sql.DataFrame
+        DataFrame returned by deterministic_linkage(). This will include
+        variables: left identifier; right identifier and matchkey number
+
+    Returns
+    -------
+    pyspark.sql.DataFrame
+        DataFrame of counts of matches achieved by matchkey number.
+    """
+    return linked_df.groupBy("matchkey").count().sort("count", ascending=False)
+
+
+def matchkey_dataframe(mks: list) -> DataFrame:
+    """Create DataFrame of matchkeys and descriptions.
+
+    Takes a list of matchkeys. Assigns numbers to matchkeys based on
+    order in list provided. Adds description of each matchkey from
+    string manipulation of join condition.
+
+    Parameters
+    ----------
+    mks : list
+        List of matchkeys.
+
+    Returns
+    -------
+    pyspark.sql.DataFrame
+        DataFrame of matchkeys and descriptions.
+    """
+    spark = SparkSession.builder.getOrCreate()
+
+    mk_df = spark.createDataFrame(
+        pd.DataFrame(
+            {
+                "matchkey": [x for x, y in enumerate(mks, 1)],
+                "description": [str(x) for x in mks],
+            }
+        )[["matchkey", "description"]]
+    ).withColumn(
+        "description",
+        F.regexp_replace(
+            F.col("description"),
+            "(?:Column[<]b['])|(?:['][>][,] \
+                 Column[<]b['])|(?:['][>])| ",
+            "",
+        ),
+    )
+
+    return mk_df
+
+
+def matchkey_join(
+    df_l: DataFrame,
+    df_r: DataFrame,
+    id_l: str,
+    id_r: str,
+    match_key: list,
+    mk_n: int = 0,
+) -> DataFrame:
+    """Join DataFrames on matchkey retaining only 1:1 matches.
+
+    Joins left and right DataFrames on specified matchkey. Retains only
+    instances of 1:1 matches between left and right identifiers (i.e.
+    where matches are unique and there is only one match candidate for
+    each left and right identifier). Adds 'matchkey' column to record
+    matchkey number.
+
+    Parameters
+    ----------
+    df_l : pyspark.sql.DataFrame
+        Left DataFrame to be joined.
+    df_r : pyspark.sql.DataFrame
+        Right DataFrame to be joined.
+    id_l : str
+        Variable name of column containing left unique identifier.
+    id_r : str
+        Variable name of column containing right unique identifier.
+    match_key : list
+        Matchkey join conditions.
+    mk_n : int
+        Matchkey number (order of application).
+
+    Returns
+    -------
+    pyspark.sql.DataFrame
+        DataFrame of unique 1:1 joins on left and right DataFrame.
+        Retaining only left and right identifiers and matchkey number.
+
+    See Also
+    --------
+    mk_dropna()
+    """
+    df_l = mk_dropna(df_l, match_key)
+    df_r = mk_dropna(df_r, match_key)
+
+    df = (
+        df_l.join(df_r, match_key, "inner")
+        .select(id_l, id_r)
+        .dropDuplicates()
+        .withColumn("matchkey", F.lit(mk_n))
+    )
+
+    df = da.filter_window(df, id_r, id_l, "count", 1)
+    df = da.filter_window(df, id_l, id_r, "count", 1)
+
+    return df
+
+
+def metaphone(df: DataFrame, input_col: str, output_col: str) -> DataFrame:
+    """Generate the metaphone phonetic encoding of a string.
+
+    Parameters
+    ----------
+    df : pyspark.sql.DataFrame
+        A DataFrame containing an input column.
+    input_col : str
+        Name of column to create metaphone encoding on.
+    output_col : str
+        Name of column to be output.
+
+    Returns
+    -------
+    pyspark.sql.DataFrame
+        A df with output_col appended
+
+    Examples
+    --------
+    >>> metaphone(df, "Forename", "forename_metaphone").show()
+    +---+---------+------------------+
+    | ID| Forename|forename_metaphone|
+    +---+---------+------------------+
+    |  1|    David|               TFT|
+    |  2|  Idrissa|              ITRS|
+    |  3|   Edward|             ETWRT|
+    |  4|   Gordon|              KRTN|
+    |  5|     Emma|                EM|
+    +---+---------+------------------+
+    """
+
+    @F.udf(returnType=StringType())
+    def meta(_string):
+        return None if _string is None else jellyfish.metaphone(_string)
+
+    df = df.withColumn(output_col, meta(F.col(input_col)))
+
+    return df
+
+
+def mk_dropna(df: DataFrame, match_key: list) -> DataFrame:
+    """Drop rows with nulls in matchkey join columns.
+
+    Drops null values in variables included in matchkeys join
+    conditions.
+
+    Improves efficiency of join by excluding records containing nulls in
+    matchkey component columns as these records would not match. Also
+    avoids skew resulting from nulls. Used in order_matchkeys() and
+    matchkey_join().
+
+    Parameters
+    ----------
+    df : pyspark.sql.DataFrame
+        DataFrame the to which matchkeys will be applied.
+    match_key : list
+        A list of join conditions (as specified in a matchkey(s)).
+
+    Returns
+    -------
+    pyspark.sql.DataFrame
+        DataFrame with null values dropped from matchkey component
+        variables.
+
+    See Also
+    --------
+    extract_mk_variables()
+    """
+    variables = extract_mk_variables(df, match_key)
+
+    df = df.dropna(subset=variables)
+
+    return df
+
+
+def order_matchkeys(
+    df_l: DataFrame, df_r: DataFrame, mks: list, chunk: int = 10
+) -> DataFrame:
+    """Order matchkeys by ascending number of matches.
+
+    Orders matchkey components based on the number of matches made by
+    each matchkey in ascending order
+
+    Parameters
+    ----------
+    df_l : pyspark.sql.DataFrame
+        Left DataFrame to which matchkeys will be applied.
+    df_r : pyspark.sql.DataFrame
+        Right DataFrame to which matchkeys will be applied.
+    mks : list
+        A list of join conditions (as specified in a matchkey(s)).
+    chunk : int, optional
+        Defaults to 10.
+
+    Returns
+    -------
+    pyspark.sql.DataFrame
+        DataFrame with null values dropped from matchkey component
+        variables.
+    """
+    mk_order = pd.DataFrame(
+        {"mks": mks, "supplied_order": [mk_n for mk_n, mk in enumerate(mks)]}
+    )
+
+    mks = ut.chunk_list(mks, chunk)
+
+    mk_counts = pd.DataFrame(columns=["supplied_order", "count"])
+
+    chunk_n = 0 - chunk
+
+    for mk_chunk in mks:
+        chunk_n += chunk
+
+        df = da.union_all(
+            *[
+                (
+                    mk_dropna(df_l, mk)
+                    .join(mk_dropna(df_r, mk), on=mk, how="inner")
+                    .withColumn("supplied_order", F.lit(mk_n + chunk_n))
+                    .select("supplied_order")
+                )
+                for mk_n, mk in enumerate(mk_chunk)
+            ]
+        )
+
+        df = df.groupBy("supplied_order").count().toPandas()
+
+        mk_counts = mk_counts.append(df).reset_index(drop=True)
+
+    mk_order = mk_order.merge(mk_counts, on="supplied_order").sort_values("count")
+
+    mk_order = list(mk_order["mks"])
+
+    return mk_order
+
+
+def soundex(df: DataFrame, input_col: str, output_col: str) -> DataFrame:
+    """Generate the soundex phonetic encoding of a string.
+
+    Parameters
+    ----------
+    df : pyspark.sql.DataFrame
+        A DataFrame containing an input column.
+    input_col : str
+        Name of column to create soundex encoding on.
+    output_col : str
+        Name of column to be output.
+
+    Returns
+    -------
+    pyspark.sql.DataFrame
+        A df with output_col appended.
+
+    Examples
+    --------
+    >>> df.show()
+    +---+--------+
+    | ID|Forename|
+    +---+--------+
+    |  1|   Homer|
+    |  2|   Marge|
+    |  3|    Bart|
+    |  4|    Lisa|
+    |  5|  Maggie|
+    +---+--------+
+    >>> soundex(df, "Forename", "forename_soundex").show()
+    +---+--------+----------------+
+    | ID|Forename|forename_soundex|
+    +---+--------+----------------+
+    |  1|   Homer|            H560|
+    |  2|   Marge|            M620|
+    |  3|    Bart|            B630|
+    |  4|    Lisa|            L200|
+    |  5|  Maggie|            M200|
+    +---+--------+----------------+
+    """
+    df = df.withColumn(output_col, F.soundex(input_col))
+    return df
+
+
+def std_lev_score(string1: str, string2: str) -> Column:
+    """Compute Levenshtein similarity score between two strings.
+
+    Applies the standardised levenshtein string similarity function to
+    two strings to return a score between 0 and 1.
+
+    This function works at the column level, and so needs to either be
+    applied to two forename columns in an already-linked dataset, or as
+    a join condition in a match key. See example for both scenarios
+    outlined.
+
+    Parameters
+    ----------
+    string1 : str
+        String to be compared to ``string2``.
+    string2 : str
+        String to be compared to ``string1``.
+
+    Returns
+    -------
+    Column
+        A column containing a similarity score between 0 and 1.
+
+    Examples
+    --------
+    For a pre-joined dataset:
+
+    >>> df.show()
+    +---+--------+----------+
+    | ID|Forename|Forename_2|
+    +---+--------+----------+
+    |  1|   Homer|  Milhouse|
+    |  2|   Marge|  Milhouse|
+    |  3|    Bart|  Milhouse|
+    |  4|    Lisa|  Milhouse|
+    |  5|  Maggie|  Milhouse|
+    +---+--------+----------+
+    >>> df = df.withColumn(
+    ...     "forename_lev", std_lev_score(F.col("Forename"), F.col("Forename_2"))
+    ... )
+    +---+--------+----------+------------+
+    | ID|Forename|Forename_2|forename_lev|
+    +---+--------+----------+------------+
+    |  1|   Homer|  Milhouse|       0.125|
+    |  2|   Marge|  Milhouse|        0.25|
+    |  3|    Bart|  Milhouse|         0.0|
+    |  4|    Lisa|  Milhouse|        0.25|
+    |  5|  Maggie|  Milhouse|        0.25|
+    +---+--------+----------+------------+
+
+    Used in a matchkey:
+
+    >>> mk = [
+    ...     std_lev_score(F.col("First_Name_cen"), F.col("First_Name_ccs")) > 0.7,
+    ...     CEN.Last_Name_cen == CCS.Last_Name_ccs,
+    ...     CEN.Sex_cen == CCS.Sex_ccs,
+    ...     CEN.Resident_Age_cen == CCS.Resident_Age_ccs,
+    ...     CEN.Postcode_cen == CCS.Postcode_ccs,
+    ... ]
+    >>> links = deterministic_linkage(
+    ...     df_l=CEN,
+    ...     df_r=CCS,
+    ...     id_l="Resident_ID_cen",
+    ...     id_r="Resident_ID_ccs",
+    ...     matchkeys=mk,
+    ...     out_dir="/some_path/links",
+    ... )
+    """
+    return 1 - (
+        (F.levenshtein(string1, string2))
+        / F.greatest(F.length(string1), F.length(string2))
+    )

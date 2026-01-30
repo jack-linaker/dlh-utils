@@ -1,7 +1,3 @@
-"""
-Pytesting on Linkage functions.
-"""
-
 import numpy as np
 import pandas as pd
 import pyspark.sql.functions as F
@@ -19,10 +15,6 @@ from pyspark.sql.types import (
 )
 
 from dlh_utils.profiling import df_describe, value_counts
-
-pytestmark = pytest.mark.usefixtures("spark")
-
-#############################################################################
 
 
 class TestDfDescribe(object):
