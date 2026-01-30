@@ -6,7 +6,7 @@ import pytest
 from pyspark.sql import SparkSession
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def spark() -> Iterator[SparkSession]:
     """Set up the Spark session by using a fixture decorator.
 
