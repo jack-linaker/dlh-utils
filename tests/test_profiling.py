@@ -1,32 +1,18 @@
-import numpy as np
 import pandas as pd
-import pyspark.sql.functions as F
-import pytest
-from chispa import assert_df_equality
 from pandas.testing import assert_frame_equal
 from pyspark.sql import SparkSession
-from pyspark.sql.types import (
-    DoubleType,
-    IntegerType,
-    LongType,
-    StringType,
-    StructField,
-    StructType,
-)
 
 from dlh_utils.profiling import df_describe, value_counts
 
 
-class TestDfDescribe(object):
-    def test_expected(self, spark):
+class TestDfDescribe:
+    def test_expected(self, spark: SparkSession) -> None:
         df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {
-                        "colA": ["A", "A", "", None, "C", "C", "C", None],
-                        "colB": [None, 1, 2, 3, 4.55, 5, 6, 7],
-                    }
-                )
+            pd.DataFrame(
+                {
+                    "colA": ["A", "A", "", None, "C", "C", "C", None],
+                    "colB": [None, 1, 2, 3, 4.55, 5, 6, 7],
+                }
             )
         )
         result = df_describe(df, output_mode="pandas", approx_distinct=False, rsd=0.05)
@@ -56,31 +42,25 @@ class TestDfDescribe(object):
         assert_frame_equal(result, expected)
 
 
-#############################################################################
-
-
-class TestValueCounts(object):
-    def test_expected(self, spark):
+class TestValueCounts:
+    def test_expected(self, spark: SparkSession) -> None:
         df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {
-                        "Year_of_Birth": [
-                            "1944",
-                            "1997",
-                            "1957",
-                            None,
-                            "1944",
-                            "1965",
-                            "1984",
-                            None,
-                        ],
-                    }
-                )
+            pd.DataFrame(
+                {
+                    "Year_of_Birth": [
+                        "1944",
+                        "1997",
+                        "1957",
+                        None,
+                        "1944",
+                        "1965",
+                        "1984",
+                        None,
+                    ],
+                }
             )
         )
         result = value_counts(df, limit=10, output_mode="pandas")
-
         result = (
             result[0]
             .replace({"": None})
@@ -99,7 +79,6 @@ class TestValueCounts(object):
             )
             .reset_index(drop=True),
         )
-
         expected = (
             pd.DataFrame(
                 {
@@ -136,7 +115,5 @@ class TestValueCounts(object):
                 }
             ),
         )
-
         assert_frame_equal(result[0], expected[0], check_like=True)
-
         assert_frame_equal(result[1], expected[1], check_like=True)
