@@ -79,17 +79,16 @@ def flag(
     |  4|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|
     |  5|  Maggie|       null|Simpson|2021-01-12|  F|ET74 2SP|
     +---+--------+-----------+-------+----------+---+--------+
-
     >>> flag(
-            df,
-            ref_col="Middle_name",
-            condition="isNotNull",
-            condition_value=None,
-            condition_col=None,
-            alias=None,
-            prefix="FLAG",
-            fill_null=None,
-        ).show()
+    ...     df,
+    ...     ref_col="Middle_name",
+    ...     condition="isNotNull",
+    ...     condition_value=None,
+    ...     condition_col=None,
+    ...     alias=None,
+    ...     prefix="FLAG",
+    ...     fill_null=None,
+    ... ).show()
     +---+--------+-----------+-------+----------+---+--------+------------------------+
     | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|FLAG_Middle_nameisNotNull|
     +---+--------+-----------+-------+----------+---+--------+------------------------+
@@ -166,84 +165,6 @@ def flag(
     return df
 
 
-def flag_summary(
-    df: DataFrame, flags: str | list[str] | None = None, *, pandas: bool = False
-) -> DataFrame | pd.DataFrame:
-    """Produce summary table of boolean flag columns.
-
-    Produces a summary of True/False counts and percentages. Option to
-    output as pandas or spark DataFrame (default spark).
-
-    Parameters
-    ----------
-    df : pyspark.sql.DataFrame
-        The DataFrame the function is applied to.
-    flags : str | list[str], optional
-        A boolean flag column title in the format of a string or a list
-        of strings of boolean flag column titles. Defaults to None.
-    pandas : bool, optional
-        Option to output as a pandas DataFrame. Defaults to False.
-
-    Returns
-    -------
-    pyspark.sql.DataFrame | pandas.DataFrame
-        DataFrame with additional window column.
-
-    Examples
-    --------
-    >>> df.show()
-    +---+--------+-----------+-------+----------+---+--------+-------------------------+
-    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|FLAG_Middle_nameisNotNull|
-    +---+--------+-----------+-------+----------+---+--------+-------------------------+
-    |  1|   Homer|        Jay|Simpson|1983-05-12|  M|ET74 2SP|                     true|
-    |  2|   Marge|     Juliet|Simpson|1983-03-19|  F|ET74 2SP|                     true|
-    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|                     true|
-    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|                     true|
-    |  4|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|                     true|
-    |  5|  Maggie|       null|Simpson|2021-01-12|  F|ET74 2SP|                    false|
-    +---+--------+-----------+-------+----------+---+--------+-------------------------+
-
-    >>> flag_summary(df, flags=None, pandas=False).show()
-    +---------------------+----+-----+----+-----------------+------------------+
-    |                 flag|true|false|rows|     percent_true|     percent_false|
-    +---------------------+----+-----+----+-----------------+------------------+
-    |FLAG_Middle_nameis...|   5|    1|   6|83.33333333333334|16.666666666666657|
-    +---------------------+----+-----+----+-----------------+------------------+
-    """
-    spark = SparkSession.builder.getOrCreate()
-
-    if flags is None:
-        flags = [column for column in df.columns if column.startswith("FLAG_")]
-
-    if not isinstance(flags, list):
-        flags = [flags]
-
-    rows = df.count()
-
-    flags_out = []
-
-    for col in flags:
-        flags_out.append((df.select(col).where(F.col(col) == F.lit(True)).count()))
-
-    out = pd.DataFrame(
-        {
-            "flag": flags,
-            "true": flags_out,
-            "false": [rows - x for x in flags_out],
-            "rows": rows,
-            "percent_true": [(x / rows) * 100 for x in flags_out],
-            "percent_false": [100 - ((x / rows) * 100) for x in flags_out],
-        }
-    )
-
-    out = out[["flag", "true", "false", "rows", "percent_true", "percent_false"]]
-
-    if pandas is False:
-        out = spark.createDataFrame(out).coalesce(1)
-
-    return out
-
-
 def flag_check(
     df: DataFrame,
     prefix: str = "FLAG_",
@@ -251,7 +172,11 @@ def flag_check(
     mode: Literal["master", "split", "pass", "fail"] = "master",
     *,
     summary: bool = False,
-) -> DataFrame:
+) -> (
+    DataFrame
+    | tuple[DataFrame, DataFrame | pd.DataFrame]
+    | tuple[DataFrame, DataFrame, DataFrame | pd.DataFrame]
+):
     """Read flag columns and counts True/False values.
 
     Adds flag count column (counting TRUE/Fail values) and overall fail
@@ -281,12 +206,12 @@ def flag_check(
         fail is True. "split": returns two separate DataFrames for both
         pass and fail results. Defaults to "master".
     summary : bool, optional
-        Optional flag summary employing ``flag_summary`` function.
+        Optional flag summary employing `flag_summary` function.
         Defaults to False.
 
     Returns
     -------
-    pyspark.sql.DataFrame
+    pyspark.sql.DataFrame | tuple[pyspark.sql.DataFrame, pyspark.sql.DataFrame | pandas.DataFrame] | tuple[pyspark.sql.DataFrame, pyspark.sql.DataFrame, pyspark.sql.DataFrame | pandas.DataFrame]
         Returns DataFrame with results depending on the mode argument.
         If the mode argument is set to split, it will return two
         DataFrames.
@@ -304,7 +229,6 @@ def flag_check(
     |  4|    Lisa|      Marie|Simpson|  F|                     true|
     |  5|  Maggie|       null|Simpson|  F|                    false|
     +---+--------+-----------+-------+---+-------------------------+
-
     >>> flag_check(df, prefix="FLAG_", flags=None, mode="master", summary=False).show()
     +---+--------+-----------+-------+---+-------------------------+----------+-----+
     | ID|Forename|Middle_name|Surname|Sex|FLAG_Middle_nameisNotNull|flag_count| FAIL|
@@ -319,7 +243,7 @@ def flag_check(
 
     See Also
     --------
-    ``flag_summary``
+    `flag_summary`
 
     Notes
     -----
@@ -384,3 +308,80 @@ def flag_check(
 
         if mode == "fail":
             return df.where(F.col("FAIL") == F.lit(True))
+
+
+def flag_summary(
+    df: DataFrame, flags: str | list[str] | None = None, *, pandas: bool = False
+) -> DataFrame | pd.DataFrame:
+    """Produce summary table of boolean flag columns.
+
+    Produces a summary of True/False counts and percentages. Option to
+    output as pandas or spark DataFrame (default spark).
+
+    Parameters
+    ----------
+    df : pyspark.sql.DataFrame
+        The DataFrame the function is applied to.
+    flags : str | list[str], optional
+        A boolean flag column title in the format of a string or a list
+        of strings of boolean flag column titles. Defaults to None.
+    pandas : bool, optional
+        Option to output as a pandas DataFrame. Defaults to False.
+
+    Returns
+    -------
+    pyspark.sql.DataFrame | pandas.DataFrame
+        DataFrame with additional window column.
+
+    Examples
+    --------
+    >>> df.show()
+    +---+--------+-----------+-------+----------+---+--------+-------------------------+
+    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|FLAG_Middle_nameisNotNull|
+    +---+--------+-----------+-------+----------+---+--------+-------------------------+
+    |  1|   Homer|        Jay|Simpson|1983-05-12|  M|ET74 2SP|                     true|
+    |  2|   Marge|     Juliet|Simpson|1983-03-19|  F|ET74 2SP|                     true|
+    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|                     true|
+    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|                     true|
+    |  4|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|                     true|
+    |  5|  Maggie|       null|Simpson|2021-01-12|  F|ET74 2SP|                    false|
+    +---+--------+-----------+-------+----------+---+--------+-------------------------+
+    >>> flag_summary(df, flags=None, pandas=False).show()
+    +---------------------+----+-----+----+-----------------+------------------+
+    |                 flag|true|false|rows|     percent_true|     percent_false|
+    +---------------------+----+-----+----+-----------------+------------------+
+    |FLAG_Middle_nameis...|   5|    1|   6|83.33333333333334|16.666666666666657|
+    +---------------------+----+-----+----+-----------------+------------------+
+    """
+    spark = SparkSession.builder.getOrCreate()
+
+    if flags is None:
+        flags = [column for column in df.columns if column.startswith("FLAG_")]
+
+    if not isinstance(flags, list):
+        flags = [flags]
+
+    rows = df.count()
+
+    flags_out = []
+
+    for col in flags:
+        flags_out.append((df.select(col).where(F.col(col) == F.lit(True)).count()))
+
+    out = pd.DataFrame(
+        {
+            "flag": flags,
+            "true": flags_out,
+            "false": [rows - x for x in flags_out],
+            "rows": rows,
+            "percent_true": [(x / rows) * 100 for x in flags_out],
+            "percent_false": [100 - ((x / rows) * 100) for x in flags_out],
+        }
+    )
+
+    out = out[["flag", "true", "false", "rows", "percent_true", "percent_false"]]
+
+    if pandas is False:
+        out = spark.createDataFrame(out).coalesce(1)
+
+    return out
