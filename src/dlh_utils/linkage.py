@@ -20,26 +20,26 @@ def alpha_name(df: DataFrame, input_col: str, output_col: str) -> DataFrame:
     """Sort a string column alphabetically and make uppercase.
 
     Orders each field of a string column alphabetically, also setting to
-    UPPERCASE. If ``input_col`` contains a Null, this will remain in
-    ``output_col``.
+    UPPERCASE. If `input_col` contains a Null, this will remain in
+    `output_col`.
 
     Parameters
     ----------
     df : pyspark.sql.DataFrame
-      A DataFrame containing an input column.
+        A DataFrame containing an input column.
     input_col : str
-      Name of column to be sorted alphabetically.
+        Name of column to be sorted alphabetically.
     output_col : str
-      Name of column to be output.
+        Name of column to be output.
 
     Returns
     -------
     pyspark.sql.DataFrame
-      A dataframe with ``output_col`` appended.
+        A dataframe with `output_col` appended.
 
     Raises
     ------
-    Exception if ``input_col`` not str.
+    Exception if `input_col` not str.
 
     Examples
     --------
@@ -54,7 +54,6 @@ def alpha_name(df: DataFrame, input_col: str, output_col: str) -> DataFrame:
     |  5|  Maggie|
     |  6|    null|
     +---+--------+
-
     >>> alpha_name(df, "Forename", "alpha_name").show()
     +---+--------+----------+
     | ID|Forename|alpha_name|
@@ -98,7 +97,7 @@ def metaphone(df: DataFrame, input_col: str, output_col: str) -> DataFrame:
     Returns
     -------
     pyspark.sql.DataFrame
-       A df with output_col appended
+        A df with output_col appended
 
     Examples
     --------
@@ -152,7 +151,6 @@ def soundex(df: DataFrame, input_col: str, output_col: str) -> DataFrame:
     |  4|    Lisa|
     |  5|  Maggie|
     +---+--------+
-
     >>> soundex(df, "Forename", "forename_soundex").show()
     +---+--------+----------------+
     | ID|Forename|forename_soundex|
@@ -205,7 +203,6 @@ def std_lev_score(string1: str, string2: str) -> Column:
     |  4|    Lisa|  Milhouse|
     |  5|  Maggie|  Milhouse|
     +---+--------+----------+
-
     >>> df = df.withColumn(
     ...     "forename_lev", std_lev_score(F.col("Forename"), F.col("Forename_2"))
     ... )
@@ -281,7 +278,6 @@ def jaro(string1: str | None, string2: str | None) -> float | None:
     |  4|    Lisa|      John|
     |  5|  Maggie|      John|
     +---+--------+----------+
-
     >>> df = df.withColumn(
     ...     "Forename_jaro", jaro(F.col("Forename"), F.col("Forename_2"))
     ... )
@@ -357,7 +353,6 @@ def jaro_winkler(string1: str | None, string2: str | None) -> float | None:
     |  4|   Gordon|     Emily|
     |  5|     Emma|     Emily|
     +---+---------+----------+
-
     >>> df = df.withColumn(
     ...     "fnjaro_winkler", jaro_winkler(F.col("Forename"), F.col("Forename_2"))
     ... )
@@ -431,7 +426,6 @@ def difflib_sequence_matcher(string1: str | None, string2: str | None) -> float 
     |  4|   Gordon|     Emily|
     |  5|     Emma|     Emily|
     +---+---------+----------+
-
     >>> df = df.withColumn(
     ...     "sequence_matcher",
     ...     difflib_sequence_matcher(F.col("Forename"), F.col("Forename_2")),
@@ -489,7 +483,6 @@ def blocking(
     |   2|      1| Female|gu1211|
     |   3|     56|   Male|gu2111|
     +----+-------+-------+------+
-
     >>> df2.show()
     +----+-------+-------+------+
     |ID_2|age_df2|sex_df2|pc_df2|
@@ -498,7 +491,6 @@ def blocking(
     |   5|     56|   Male|gu1411|
     |   4|      7| Female|gu1111|
     +----+-------+-------+------+
-
     >>> blocking(df1, df2, blocks, id_vars).show()
     +----+-------+-------+------+----+-------+-------+------+
     |ID_1|age_df1|sex_df1|pc_df1|ID_2|age_df2|sex_df2|pc_df2|
@@ -579,7 +571,6 @@ def cluster_number(df: DataFrame, id_1: str, id_2: str) -> DataFrame | None:
     | 1a| 8b|
     | 2a| 9b|
     +---+---+
-
     >>> cluster_number(df=df, id_1="id1", id_2="id2").show()
     +---+---+--------------+
     |id1|id2|Cluster_Number|
@@ -818,12 +809,6 @@ def matchkey_join(
     --------
     mk_dropna()
     """
-    # variables_l = extract_mk_variables(df_l,match_key)
-    # variables_r = extract_mk_variables(df_r,match_key)
-
-    # df_l = df_l.dropna(subset=variables_l)
-    # df_r = df_r.dropna(subset=variables_r)
-
     df_l = mk_dropna(df_l, match_key)
     df_r = mk_dropna(df_r, match_key)
 
@@ -840,7 +825,7 @@ def matchkey_join(
     return df
 
 
-def matchkey_dataframe(mks: list):
+def matchkey_dataframe(mks: list) -> DataFrame:
     """Create DataFrame of matchkeys and descriptions.
 
     Takes a list of matchkeys. Assigns numbers to matchkeys based on
