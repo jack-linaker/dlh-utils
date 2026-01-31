@@ -65,8 +65,9 @@ def coalesced(
 ) -> DataFrame:
     """Add column with each row's first non-null value.
 
-    Produces a new column from a supplied DataFrame, that contains the
-    first non-null value from each row.
+    Produces a new column from a supplied DataFrame that contains the
+    first non-null value from each row. All values in new column are
+    cast to `StringType`.
 
     Parameters
     ----------
@@ -91,28 +92,57 @@ def coalesced(
 
     Examples
     --------
+    >>> data = [(None, None), (1, None), (None, 2)]
+    >>> df = spark.createDataFrame(data, ["a", "b"])
     >>> df.show()
     +----+----+
     |   a|   b|
     +----+----+
-    |null|null|
-    |   1|null|
-    |null|   2|
+    |NULL|NULL|
+    |   1|NULL|
+    |NULL|   2|
     +----+----+
-    >>> coalesced(df, subset=None, output_col="coalesced_col").show()
+
+    Default behaviour:
+
+    >>> coalesced(df).show()
     +----+----+-------------+
     |   a|   b|coalesced_col|
     +----+----+-------------+
-    |null|null|         null|
-    |   1|null|            1|
-    |null|   2|            2|
+    |NULL|NULL|         NULL|
+    |   1|NULL|            1|
+    |NULL|   2|            2|
     +----+----+-------------+
 
-    >>> coalesced(df, subset=None, output_col="coalesced_col", drop=True).show()
+    Choose specific columns:
+
+    >>> coalesced(df, subset=["a"]).show()
+    +----+----+-------------+
+    |   a|   b|coalesced_col|
+    +----+----+-------------+
+    |NULL|NULL|         NULL|
+    |   1|NULL|            1|
+    |NULL|   2|         NULL|
+    +----+----+-------------+
+
+    Choose a name for the output column:
+
+    >>> coalesced(df, output_col="coalesced").show()
+    +----+----+---------+
+    |   a|   b|coalesced|
+    +----+----+---------+
+    |NULL|NULL|     NULL|
+    |   1|NULL|        1|
+    |NULL|   2|        2|
+    +----+----+---------+
+
+    Drop the coalesced columns:
+
+    >>> coalesced(df, drop=True).show()
     +-------------+
     |coalesced_col|
     +-------------+
-    |         null|
+    |         NULL|
     |            1|
     |            2|
     +-------------+
@@ -120,7 +150,11 @@ def coalesced(
     if subset is None:
         subset = df.columns
 
-    df = df.withColumn(output_col, sf.coalesce(*[sf.col(x) for x in subset]))
+    # Cast everything to string so the output column has a consistent
+    # type.
+    cols = [sf.col(c).cast("string") for c in subset]
+
+    df = df.withColumn(output_col, sf.coalesce(*cols))
 
     if drop:
         df = drop_columns(df, subset=subset, drop_duplicates=False)

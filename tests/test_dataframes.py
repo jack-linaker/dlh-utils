@@ -46,18 +46,25 @@ class TestCloneColumn:
 
 class TestCoalesced:
     def test_expected(self, spark: SparkSession) -> None:
-        pdf = pd.DataFrame(
-            {
-                "extra": [None, None, None, "FO+ UR", None],
-                "lower": ["one", None, "one", "four", None],
-                "lowerNulls": ["one", "two", None, "four", None],
-                "upperNulls": ["ONE", "TWO", None, "FOU  R", None],
-                "value": [1, 2, 3, 4, 5],
-            }
+        input_df = spark.createDataFrame(
+            pd.DataFrame(
+                {
+                    "extra": [None, None, None, "FO+ UR", None],
+                    "lower": ["one", None, "one", "four", None],
+                    "lowerNulls": ["one", "two", None, "four", None],
+                    "upperNulls": ["ONE", "TWO", None, "FOU  R", None],
+                    "value": [1, 2, 3, 4, 5],
+                }
+            )
         )
-        pdf = pdf[["extra", "lower", "lowerNulls", "upperNulls", "value"]]
-        test_df = spark.createDataFrame((pdf))
-        intended_schema = StructType(
+        expected_data: list[list[str | None | int]] = [
+            [None, "one", "one", "ONE", 1, "one"],
+            [None, None, "two", "TWO", 2, "two"],
+            [None, "one", None, None, 3, "one"],
+            ["FO+ UR", "four", "four", "FOU  R", 4, "FO+ UR"],
+            [None, None, None, None, 5, "5"],
+        ]
+        expected_schema = StructType(
             [
                 StructField("extra", StringType()),
                 StructField("lower", StringType()),
@@ -67,34 +74,27 @@ class TestCoalesced:
                 StructField("coalesced_col", StringType()),
             ]
         )
-        intended_data = [
-            [None, "one", "one", "ONE", 1, "one"],
-            [None, None, "two", "TWO", 2, "two"],
-            [None, "one", None, None, 3, "one"],
-            ["FO+ UR", "four", "four", "FOU  R", 4, "FO+ UR"],
-            [None, None, None, None, 5, "5"],
-        ]
-        intended_df = spark.createDataFrame(intended_data, intended_schema)
-        result_df = coalesced(test_df)
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        expected_output = spark.createDataFrame(expected_data, expected_schema)
+        actual_output = coalesced(input_df)
+        assertDataFrameEqual(expected_output, actual_output)
 
     def test_expected_with_drop(self, spark: SparkSession) -> None:
-        pdf = pd.DataFrame(
-            {
-                "lower": ["one", None, "one", "four", None],
-                "value": [1, 2, 3, 4, 5],
-                "extra": [None, None, None, "FO+ UR", None],
-                "lowerNulls": ["one", "two", None, "four", None],
-                "upperNulls": ["ONE", "TWO", None, "FOU  R", None],
-            }
+        input_df = spark.createDataFrame(
+            pd.DataFrame(
+                {
+                    "lower": ["one", None, "one", "four", None],
+                    "value": [1, 2, 3, 4, 5],
+                    "extra": [None, None, None, "FO+ UR", None],
+                    "lowerNulls": ["one", "two", None, "four", None],
+                    "upperNulls": ["ONE", "TWO", None, "FOU  R", None],
+                }
+            )
         )
-        pdf = pdf[["lower", "value", "extra", "lowerNulls", "upperNulls"]]
-        test_df2 = spark.createDataFrame((pdf))
-        intended_schema2 = StructType([StructField("coalesced_col", StringType())])
-        intended_data2 = [["one"], ["2"], ["one"], ["four"], ["5"]]
-        intended_df2 = spark.createDataFrame(intended_data2, intended_schema2)
-        result_df2 = coalesced(test_df2, drop=True)
-        assertDataFrameEqual(intended_df2, result_df2, ignoreColumnOrder=True)
+        expected_data = [["one"], ["2"], ["one"], ["four"], ["5"]]
+        expected_schema = StructType([StructField("coalesced_col", StringType())])
+        expected_output = spark.createDataFrame(expected_data, expected_schema)
+        actual_output = coalesced(input_df, drop=True)
+        assertDataFrameEqual(expected_output, actual_output)
 
 
 class TestConcat:
@@ -124,7 +124,7 @@ class TestConcat:
                 StructField("fullname", StringType()),
             ]
         )
-        intended_data = [
+        intended_data: list[list[str | None | float]] = [
             [None, "Maria", "Jones", 1.0, "Maria_Jones", "Maria_Jones"],
             ["Claire", None, None, 2.0, "Claire", "Claire"],
             ["Josh", "", "Smith", None, "Josh_Smith", "Josh_Smith"],
