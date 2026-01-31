@@ -25,6 +25,214 @@ from pyspark.sql.types import (
 from dlh_utils import dataframes as da
 
 
+def chunk_list(_list: list[Any], _num: int) -> list[Any]:
+    """Split a list into a specified number of chunks.
+
+    Parameters
+    ----------
+    _list : list[Any]
+        A list.
+    _num : int
+        The number of chunks.
+
+    Returns
+    -------
+    list[Any]
+    """
+    return [
+        _list[i * _num : (i + 1) * _num] for i in range((len(_list) + _num - 1) // _num)
+    ]
+
+
+def clone_hive_table(
+    database: str, table_name: str, new_table: str, suffix: str = ""
+) -> None:
+    """Duplicate Hive table.
+
+    Parameters
+    ----------
+    database : str
+        Name of database.
+    table_name : str
+        Name of table being cloned.
+    new_table : str
+        Name of cloned table.
+    suffix : str, optional
+        String appended to table name. Defaults to "".
+    """
+    spark = SparkSession.builder.getOrCreate()
+
+    spark.sql(
+        f"CREATE TABLE {database}.{new_table}{suffix} \
+              AS SELECT * FROM {database}.{table_name}"
+    )
+
+
+def create_hive_table(df: DataFrame, database: str, table_name: str) -> None:
+    """Create Hive table from dataframe.
+
+    Saves all information within a dataframe into a Hive table.
+
+    Parameters
+    ----------
+    df : pyspark.sql.DataFrame
+        Dataframe being saved as a Hive table.
+    database : str
+        Name of database Hive table is being saved to.
+    table_name : str
+        Name of table df is being named to.
+    """
+    spark = SparkSession.builder.getOrCreate()
+
+    df.createOrReplaceTempView("tempTable")
+    spark.sql(
+        f"CREATE TABLE {database}.{table_name} AS \
+              SELECT * FROM tempTable"
+    )
+
+
+def describe_metrics(
+    df: DataFrame, output_mode: Literal["pandas", "spark"] = "pandas"
+) -> pd.DataFrame | DataFrame:
+    """Summarise variable metrics.
+
+    Used to describe information about variables within a dataframe,
+    including:
+
+    - type
+    - count
+    - distinct value count
+    - percentage of distinct values
+    - null count
+    - percentage of null values
+    - non-null value count
+    - percentage of non-null values
+
+    Parameters
+    ----------
+    df : pyspark.sql.DataFrame
+        DataFrame to produce descriptive metrics about.
+    output_mode: typing.Literal["pandas", "spark"], optional
+        The type of DataFrame to return. Defaults to "pandas".
+
+    Returns
+    -------
+    pandas.DataFrame | pyspark.sql.DataFrame
+        A DataFrame with columns detailing descriptive metrics on each
+        variable.
+
+    Examples
+    --------
+    >>> describe_metrics(df, output_mode="spark").show()
+    +-----------+------+-----+--------+----------------+----+------------+--------+----------------+
+    |   variable|  type|count|distinct|percent_distinct|null|percent_null|not_null|percent_not_null|
+    +-----------+------+-----+--------+----------------+----+------------+--------+----------------+
+    |         ID|string|    6|       5| 83.333333333334|   0|         0.0|       6|           100.0|
+    |   Forename|string|    6|       5| 83.333333333334|   0|         0.0|       6|           100.0|
+    |Middle_name|string|    6|       4| 66.666666666666|   1|16.666666664|       5| 83.333333333334|
+    |    Surname|string|    6|       1|16.6666666666664|   0|         0.0|       6|           100.0|
+    |        DoB|string|    6|       5| 83.333333333334|   0|         0.0|       6|           100.0|
+    |        Sex|string|    6|       2| 33.333333333333|   0|         0.0|       6|           100.0|
+    |   Postcode|string|    6|       1|16.6666666666664|   0|         0.0|       6|           100.0|
+    +-----------+------+-----+--------+----------------+----+------------+--------+----------------+
+    """
+    distinct_df = df.agg(
+        *(F.countDistinct(F.col(c)).alias(c) for c in df.columns)
+    ).withColumn("summary", F.lit("distinct"))
+    null_df = df.agg(
+        *(
+            F.count(F.when(F.isnan(F.col(c)) | F.col(c).isNull(), c)).alias(c)
+            for c in df.columns
+        )
+    ).withColumn("summary", F.lit("null"))
+
+    describe_df = da.union_all(distinct_df, null_df).persist()
+
+    count = df.count()
+
+    types = df.dtypes
+    types = dict(zip([x[0] for x in types], [x[1] for x in types]))
+
+    describe_df = describe_df.toPandas()
+    describe_df = describe_df.transpose().reset_index()
+    describe_df.columns = ["variable"] + list(
+        describe_df[describe_df["index"] == "summary"]
+        .reset_index(drop=True)
+        .transpose()[0]
+    )[1:]
+    describe_df = describe_df[describe_df["variable"] != "summary"]
+    describe_df["count"] = count
+    describe_df["not_null"] = describe_df["count"] - describe_df["null"]
+    for variable in ["distinct", "null", "not_null"]:
+        describe_df["percent_" + variable] = (
+            describe_df[variable] / describe_df["count"]
+        ) * 100
+    describe_df["type"] = [types[x] for x in describe_df["variable"]]
+
+    describe_df = describe_df[
+        [
+            "variable",
+            "type",
+            "count",
+            "distinct",
+            "percent_distinct",
+            "null",
+            "percent_null",
+            "not_null",
+            "percent_not_null",
+        ]
+    ]
+
+    describe_df["count"] = describe_df["count"].astype(int)
+    describe_df["distinct"] = describe_df["distinct"].astype(int)
+    describe_df["null"] = describe_df["null"].astype(int)
+    describe_df["not_null"] = describe_df["not_null"].astype(int)
+    describe_df["percent_null"] = describe_df["percent_null"].astype(float)
+    describe_df["percent_not_null"] = describe_df["percent_not_null"].astype(float)
+    describe_df["percent_distinct"] = describe_df["percent_distinct"].astype(float)
+
+    if output_mode == "spark":
+        describe_df = pandas_to_spark(describe_df)
+
+    return describe_df
+
+
+def drop_hive_table(database: str, table_name: str) -> None:
+    """Delete Hive table from Hive if it exists.
+
+    Parameters
+    ----------
+    database : str
+      Name of database.
+    table_name : str
+      Name of table.
+    """
+    spark = SparkSession.builder.getOrCreate()
+
+    spark.sql(f"DROP TABLE IF EXISTS {database}.{table_name}")
+
+
+def list_checkpoints(checkpoint: str) -> list[str]:
+    """List checkpoints in HDFS directory.
+
+    Parameters
+    ----------
+    checkpoint : str
+        String path of checkpoint directory.
+
+    Returns
+    -------
+    list[str]
+        List of files in checkpoint directory.
+
+    Examples
+    --------
+    >>> list_checkpoints(checkpoint="/user/edwara5/checkpoints")
+    ['hdfs://prod1/user/checkpoints/0299d46e-96ad-4d3a-9908-c99b9c6a7509/connected-components-985ca288']
+    """
+    return list_files(list_files(checkpoint, walk=False)[0])
+
+
 def list_files(
     file_path: str, walk: bool = False, regex: str | None = None, full_path: bool = True
 ) -> list[str]:
@@ -93,27 +301,6 @@ def list_files(
         list_of_filenames = []
 
     return list_of_filenames
-
-
-def list_checkpoints(checkpoint: str) -> list[str]:
-    """List checkpoints in HDFS directory.
-
-    Parameters
-    ----------
-    checkpoint : str
-        String path of checkpoint directory.
-
-    Returns
-    -------
-    list[str]
-        List of files in checkpoint directory.
-
-    Examples
-    --------
-    >>> list_checkpoints(checkpoint="/user/edwara5/checkpoints")
-    ['hdfs://prod1/user/checkpoints/0299d46e-96ad-4d3a-9908-c99b9c6a7509/connected-components-985ca288']
-    """
-    return list_files(list_files(checkpoint, walk=False)[0])
 
 
 def list_tables(database: str) -> list[str]:
@@ -349,71 +536,60 @@ def most_recent(
     return most_recent_filepath, filetype
 
 
-def write_format(
-    df: DataFrame,
-    write: Literal["csv", "parquet", "hive"],
-    path: str,
-    file_name: str | None = None,
-    sep: str = ",",
-    header: Literal["true", "false"] = "true",
-    mode: Literal["overwrite", "append"] = "overwrite",
-) -> None:
-    """Write DataFrame in specified format.
-
-    Can write data to HDFS in csv or parquet format and to database in
-    hive table format.
+def pandas_to_spark(pandas_df: pd.DataFrame) -> DataFrame:
+    """Create a Spark DataFrame from a given pandas DataFrame.
 
     Parameters
     ----------
-    df : pyspark.sql.DataFrame
-        Dataframe to be written.
-    write : typing.Literal["csv" ,"parquet", "hive"]
-        The format in which data is to be written.
-    path : str
-        The path or database to which dataframe is to be written.
-    file_name : str, optional
-        The file or table name under which dataframe is to be saved.
-        Note that if None, function will write to the HDFS path
-        specified in case of csv or parquet. Defaults to None.
-    sep : str, optional
-        Specified separator for data in csv format. Defaults to ","
-    header : typing.Literal["true", "false"], optional
-        Boolean indicating whether or not data will include a header.
-        Defaults to "true".
-    mode : typing.Literal["overwrite", "append"], optional
-        Choice to overwrite existing file or table or to append new data
-        into it. Defaults to "overwrite".
+    df : pandas.DataFrame
+        Pandas DataFrame being converted.
 
     Returns
     -------
-    file or table
-        Written version of DataFrame in specified format.
-
-    Examples
-    --------
-    >>> write_format(
-    ...     df, write="parquet", path="user/edwara5/simpsons.parquet", mode="overwrite"
-    ... )
+    pyspark.sql.DataFrame
+        A Spark DataFrame.
     """
-    if file_name is None:
-        if write == "csv":
-            df.write.format("csv").option("header", header).mode(mode).option(
-                "sep", sep
-            ).save(f"{path}")
-        if write == "parquet":
-            df.write.parquet(path=f"{path}", mode=mode)
-        if write == "hive":
-            df.write.mode("overwrite").saveAsTable(f"{path}")
 
-    else:
-        if write == "csv":
-            df.write.format("csv").option("header", header).mode(mode).option(
-                "sep", sep
-            ).save(f"{path}/{file_name}")
-        if write == "parquet":
-            df.write.parquet(path=f"{path}/{file_name}", mode=mode)
-        if write == "hive":
-            df.write.mode("overwrite").saveAsTable(f"{path}.{file_name}")
+    def equivalent_type(_format):
+        if _format == "datetime64[ns]":
+            return TimestampType()
+
+        if _format == "int64":
+            return LongType()
+
+        if _format == "int32":
+            return IntegerType()
+
+        if _format == "float64":
+            return DoubleType()
+
+        if _format == "float32":
+            return FloatType()
+
+        return StringType()
+
+    def define_structure(string, format_type):
+        try:
+            vartype = equivalent_type(format_type)
+
+        except TypeError:
+            vartype = StringType()
+
+        return StructField(string, vartype)
+
+    spark = SparkSession.builder.getOrCreate()
+
+    columns = list(pandas_df.columns)
+    types = list(pandas_df.dtypes)
+
+    struct_list = []
+
+    for column, vartype in zip(columns, types):
+        struct_list.append(define_structure(column, vartype))
+
+    p_schema = StructType(struct_list)
+
+    return spark.createDataFrame(pandas_df, p_schema)
 
 
 def read_format(
@@ -518,313 +694,6 @@ def read_format(
     return df
 
 
-def search_files(path: str, string: str) -> dict[str, list[int]]:
-    """Find occurrences of a string in files and return file: lines.
-
-    Finds file and line number(s) of specified string within a specified
-    file path.
-
-    Parameters
-    ----------
-    path : str
-        Path directory for which the search function is applied to.
-    string : str
-        String value that is searched within the files of the directory
-        given.
-
-    Returns
-    -------
-    dict[str, list[int]]
-        Dictionary with keys of file names containing the string and
-        values of line numbers indicating where there is a match on the
-        string.
-
-    Examples
-    --------
-    >>> search_files(path="/home/cdsw/random_stuff", string="Homer")
-    >>> {"simpsons.csv": [2]}
-    """
-    files_in_dir = os.listdir(path)
-    diction = {}  # try empty dictionary
-
-    for file in files_in_dir:
-        count = 0
-        count_list = []
-
-        try:
-            with open(f"{path}/{file}") as f:
-                datafile = f.readlines()
-
-            for line in datafile:
-                count = count + 1
-
-                if string in line:
-                    count_list.append(count)
-
-            if len(count_list) != 0:
-                diction[file] = count_list
-        except IsADirectoryError:
-            continue
-        except UnicodeDecodeError:
-            continue
-
-    return diction
-
-
-def describe_metrics(
-    df: DataFrame, output_mode: Literal["pandas", "spark"] = "pandas"
-) -> pd.DataFrame | DataFrame:
-    """Summarise variable metrics.
-
-    Used to describe information about variables within a dataframe,
-    including:
-
-    - type
-    - count
-    - distinct value count
-    - percentage of distinct values
-    - null count
-    - percentage of null values
-    - non-null value count
-    - percentage of non-null values
-
-    Parameters
-    ----------
-    df : pyspark.sql.DataFrame
-        DataFrame to produce descriptive metrics about.
-    output_mode: typing.Literal["pandas", "spark"], optional
-        The type of DataFrame to return. Defaults to "pandas".
-
-    Returns
-    -------
-    pandas.DataFrame | pyspark.sql.DataFrame
-        A DataFrame with columns detailing descriptive metrics on each
-        variable.
-
-    Examples
-    --------
-    >>> describe_metrics(df, output_mode="spark").show()
-    +-----------+------+-----+--------+----------------+----+------------+--------+----------------+
-    |   variable|  type|count|distinct|percent_distinct|null|percent_null|not_null|percent_not_null|
-    +-----------+------+-----+--------+----------------+----+------------+--------+----------------+
-    |         ID|string|    6|       5| 83.333333333334|   0|         0.0|       6|           100.0|
-    |   Forename|string|    6|       5| 83.333333333334|   0|         0.0|       6|           100.0|
-    |Middle_name|string|    6|       4| 66.666666666666|   1|16.666666664|       5| 83.333333333334|
-    |    Surname|string|    6|       1|16.6666666666664|   0|         0.0|       6|           100.0|
-    |        DoB|string|    6|       5| 83.333333333334|   0|         0.0|       6|           100.0|
-    |        Sex|string|    6|       2| 33.333333333333|   0|         0.0|       6|           100.0|
-    |   Postcode|string|    6|       1|16.6666666666664|   0|         0.0|       6|           100.0|
-    +-----------+------+-----+--------+----------------+----+------------+--------+----------------+
-    """
-    distinct_df = df.agg(
-        *(F.countDistinct(F.col(c)).alias(c) for c in df.columns)
-    ).withColumn("summary", F.lit("distinct"))
-    null_df = df.agg(
-        *(
-            F.count(F.when(F.isnan(F.col(c)) | F.col(c).isNull(), c)).alias(c)
-            for c in df.columns
-        )
-    ).withColumn("summary", F.lit("null"))
-
-    describe_df = da.union_all(distinct_df, null_df).persist()
-
-    count = df.count()
-
-    types = df.dtypes
-    types = dict(zip([x[0] for x in types], [x[1] for x in types]))
-
-    describe_df = describe_df.toPandas()
-    describe_df = describe_df.transpose().reset_index()
-    describe_df.columns = ["variable"] + list(
-        describe_df[describe_df["index"] == "summary"]
-        .reset_index(drop=True)
-        .transpose()[0]
-    )[1:]
-    describe_df = describe_df[describe_df["variable"] != "summary"]
-    describe_df["count"] = count
-    describe_df["not_null"] = describe_df["count"] - describe_df["null"]
-    for variable in ["distinct", "null", "not_null"]:
-        describe_df["percent_" + variable] = (
-            describe_df[variable] / describe_df["count"]
-        ) * 100
-    describe_df["type"] = [types[x] for x in describe_df["variable"]]
-
-    describe_df = describe_df[
-        [
-            "variable",
-            "type",
-            "count",
-            "distinct",
-            "percent_distinct",
-            "null",
-            "percent_null",
-            "not_null",
-            "percent_not_null",
-        ]
-    ]
-
-    describe_df["count"] = describe_df["count"].astype(int)
-    describe_df["distinct"] = describe_df["distinct"].astype(int)
-    describe_df["null"] = describe_df["null"].astype(int)
-    describe_df["not_null"] = describe_df["not_null"].astype(int)
-    describe_df["percent_null"] = describe_df["percent_null"].astype(float)
-    describe_df["percent_not_null"] = describe_df["percent_not_null"].astype(float)
-    describe_df["percent_distinct"] = describe_df["percent_distinct"].astype(float)
-
-    if output_mode == "spark":
-        describe_df = pandas_to_spark(describe_df)
-
-    return describe_df
-
-
-def value_counts(
-    df: DataFrame, limit: int = 20, output_mode: Literal["pandas", "spark"] = "pandas"
-) -> DataFrame:
-    """Count the most common values in all columns of a DataFrame.
-
-    Parameters
-    ----------
-    df : pyspark.sql.DataFrame
-        DataFrame to produce summary counts from.
-    limit : int, optional
-        The top n values to search for. Defaults to 20.
-    output_mode: typing.Literal["pandas", "spark"], optional
-        The type of DataFrame to return. Defaults to "pandas".
-
-    Returns
-    -------
-    pyspark.sql.DataFrame
-        A DataFrame with original DataFrame columns and a count of their
-        most common values.
-
-    Examples
-    --------
-    >>> value_counts(df, limit=5, output_mode="spark").show()
-    +---+--------+--------+--------------+-----------+-----------------+-------+-------------+
-    | ID|ID_count|Forename|Forename_count|Middle_name|Middle_name_count|Surname|Surname_count|
-    +---+--------+--------+--------------+-----------+-----------------+-------+-------------+
-    |  3|       2|    Bart|             2|      Jo-Jo|                2|Simpson|            6|
-    |  5|       1|   Homer|             1|       null|                1|       |            0|
-    |  1|       1|   Marge|             1|     Juliet|                1|       |            0|
-    |  4|       1|  Maggie|             1|      Marie|                1|       |            0|
-    |  2|       1|    Lisa|             1|        Jay|                1|       |            0|
-    +---+--------+--------+--------------+-----------+-----------------+-------+-------------+
-    """
-
-    def value_count(df, col, limit):
-        return (
-            df.groupBy(col)
-            .count()
-            .sort(["count", col], ascending=[False, True])
-            .limit(limit)
-            .withColumnRenamed("count", col + "_count")
-            .toPandas()
-        )
-
-    dfs = [value_count(df, col, limit) for col in df.columns]
-
-    def make_limit(df, limit):
-        count = df.shape[0]
-
-        if count < limit:
-            dif = limit - count
-
-            dif_df = pd.DataFrame({0: [""] * dif, 1: [0] * dif})[[0, 1]]
-
-            dif_df.columns = list(df)
-
-            df = df.append(dif_df).reset_index(drop=True)
-
-        return df
-
-    dfs = [make_limit(df, limit) for df in dfs]
-
-    df = pd.concat(dfs, axis=1)
-
-    if output_mode == "spark":
-        df = pandas_to_spark(df)
-
-    return df
-
-
-def drop_hive_table(database: str, table_name: str) -> None:
-    """Delete Hive table from Hive if it exists.
-
-    Parameters
-    ----------
-    database : str
-      Name of database.
-    table_name : str
-      Name of table.
-    """
-    spark = SparkSession.builder.getOrCreate()
-
-    spark.sql(f"DROP TABLE IF EXISTS {database}.{table_name}")
-
-
-def clone_hive_table(
-    database: str, table_name: str, new_table: str, suffix: str = ""
-) -> None:
-    """Duplicate Hive table.
-
-    Parameters
-    ----------
-    database : str
-        Name of database.
-    table_name : str
-        Name of table being cloned.
-    new_table : str
-        Name of cloned table.
-    suffix : str, optional
-        String appended to table name. Defaults to "".
-    """
-    spark = SparkSession.builder.getOrCreate()
-
-    spark.sql(
-        f"CREATE TABLE {database}.{new_table}{suffix} \
-              AS SELECT * FROM {database}.{table_name}"
-    )
-
-
-def rename_hive_table(database: str, table_name: str, new_name: str) -> None:
-    """Rename Hive table.
-
-    Parameters
-    ----------
-    database : str
-        Name of database.
-    table_name : str
-        Name of table being renamed.
-    new_name : str
-        Name of new table.
-    """
-    spark = SparkSession.builder.getOrCreate()
-    spark.sql(f"ALTER TABLE {database}.{table_name} RENAME TO {database}.{new_name}")
-
-
-def create_hive_table(df: DataFrame, database: str, table_name: str) -> None:
-    """Create Hive table from dataframe.
-
-    Saves all information within a dataframe into a Hive table.
-
-    Parameters
-    ----------
-    df : pyspark.sql.DataFrame
-        Dataframe being saved as a Hive table.
-    database : str
-        Name of database Hive table is being saved to.
-    table_name : str
-        Name of table df is being named to.
-    """
-    spark = SparkSession.builder.getOrCreate()
-
-    df.createOrReplaceTempView("tempTable")
-    spark.sql(
-        f"CREATE TABLE {database}.{table_name} AS \
-              SELECT * FROM tempTable"
-    )
-
-
 def regex_match(
     df: DataFrame, regex: str, limit: int = 10000, cut_off: float = 0.75
 ) -> list[str]:
@@ -900,76 +769,207 @@ def regex_match(
     return list(counts_df["variable"])
 
 
-def pandas_to_spark(pandas_df: pd.DataFrame) -> DataFrame:
-    """Create a Spark DataFrame from a given pandas DataFrame.
+def rename_hive_table(database: str, table_name: str, new_name: str) -> None:
+    """Rename Hive table.
 
     Parameters
     ----------
-    df : pandas.DataFrame
-        Pandas DataFrame being converted.
+    database : str
+        Name of database.
+    table_name : str
+        Name of table being renamed.
+    new_name : str
+        Name of new table.
+    """
+    spark = SparkSession.builder.getOrCreate()
+    spark.sql(f"ALTER TABLE {database}.{table_name} RENAME TO {database}.{new_name}")
+
+
+def search_files(path: str, string: str) -> dict[str, list[int]]:
+    """Find occurrences of a string in files and return file: lines.
+
+    Finds file and line number(s) of specified string within a specified
+    file path.
+
+    Parameters
+    ----------
+    path : str
+        Path directory for which the search function is applied to.
+    string : str
+        String value that is searched within the files of the directory
+        given.
+
+    Returns
+    -------
+    dict[str, list[int]]
+        Dictionary with keys of file names containing the string and
+        values of line numbers indicating where there is a match on the
+        string.
+
+    Examples
+    --------
+    >>> search_files(path="/home/cdsw/random_stuff", string="Homer")
+    >>> {"simpsons.csv": [2]}
+    """
+    files_in_dir = os.listdir(path)
+    diction = {}  # try empty dictionary
+
+    for file in files_in_dir:
+        count = 0
+        count_list = []
+
+        try:
+            with open(f"{path}/{file}") as f:
+                datafile = f.readlines()
+
+            for line in datafile:
+                count = count + 1
+
+                if string in line:
+                    count_list.append(count)
+
+            if len(count_list) != 0:
+                diction[file] = count_list
+        except IsADirectoryError:
+            continue
+        except UnicodeDecodeError:
+            continue
+
+    return diction
+
+
+def value_counts(
+    df: DataFrame, limit: int = 20, output_mode: Literal["pandas", "spark"] = "pandas"
+) -> DataFrame:
+    """Count the most common values in all columns of a DataFrame.
+
+    Parameters
+    ----------
+    df : pyspark.sql.DataFrame
+        DataFrame to produce summary counts from.
+    limit : int, optional
+        The top n values to search for. Defaults to 20.
+    output_mode: typing.Literal["pandas", "spark"], optional
+        The type of DataFrame to return. Defaults to "pandas".
 
     Returns
     -------
     pyspark.sql.DataFrame
-        A Spark DataFrame.
+        A DataFrame with original DataFrame columns and a count of their
+        most common values.
+
+    Examples
+    --------
+    >>> value_counts(df, limit=5, output_mode="spark").show()
+    +---+--------+--------+--------------+-----------+-----------------+-------+-------------+
+    | ID|ID_count|Forename|Forename_count|Middle_name|Middle_name_count|Surname|Surname_count|
+    +---+--------+--------+--------------+-----------+-----------------+-------+-------------+
+    |  3|       2|    Bart|             2|      Jo-Jo|                2|Simpson|            6|
+    |  5|       1|   Homer|             1|       null|                1|       |            0|
+    |  1|       1|   Marge|             1|     Juliet|                1|       |            0|
+    |  4|       1|  Maggie|             1|      Marie|                1|       |            0|
+    |  2|       1|    Lisa|             1|        Jay|                1|       |            0|
+    +---+--------+--------+--------------+-----------+-----------------+-------+-------------+
     """
 
-    def equivalent_type(_format):
-        if _format == "datetime64[ns]":
-            return TimestampType()
+    def value_count(df, col, limit):
+        return (
+            df.groupBy(col)
+            .count()
+            .sort(["count", col], ascending=[False, True])
+            .limit(limit)
+            .withColumnRenamed("count", col + "_count")
+            .toPandas()
+        )
 
-        if _format == "int64":
-            return LongType()
+    dfs = [value_count(df, col, limit) for col in df.columns]
 
-        if _format == "int32":
-            return IntegerType()
+    def make_limit(df, limit):
+        count = df.shape[0]
 
-        if _format == "float64":
-            return DoubleType()
+        if count < limit:
+            dif = limit - count
 
-        if _format == "float32":
-            return FloatType()
+            dif_df = pd.DataFrame({0: [""] * dif, 1: [0] * dif})[[0, 1]]
 
-        return StringType()
+            dif_df.columns = list(df)
 
-    def define_structure(string, format_type):
-        try:
-            vartype = equivalent_type(format_type)
+            df = df.append(dif_df).reset_index(drop=True)
 
-        except TypeError:
-            vartype = StringType()
+        return df
 
-        return StructField(string, vartype)
+    dfs = [make_limit(df, limit) for df in dfs]
 
-    spark = SparkSession.builder.getOrCreate()
+    df = pd.concat(dfs, axis=1)
 
-    columns = list(pandas_df.columns)
-    types = list(pandas_df.dtypes)
+    if output_mode == "spark":
+        df = pandas_to_spark(df)
 
-    struct_list = []
-
-    for column, vartype in zip(columns, types):
-        struct_list.append(define_structure(column, vartype))
-
-    p_schema = StructType(struct_list)
-
-    return spark.createDataFrame(pandas_df, p_schema)
+    return df
 
 
-def chunk_list(_list: list[Any], _num: int) -> list[Any]:
-    """Split a list into a specified number of chunks.
+def write_format(
+    df: DataFrame,
+    write: Literal["csv", "parquet", "hive"],
+    path: str,
+    file_name: str | None = None,
+    sep: str = ",",
+    header: Literal["true", "false"] = "true",
+    mode: Literal["overwrite", "append"] = "overwrite",
+) -> None:
+    """Write DataFrame in specified format.
+
+    Can write data to HDFS in csv or parquet format and to database in
+    hive table format.
 
     Parameters
     ----------
-    _list : list[Any]
-        A list.
-    _num : int
-        The number of chunks.
+    df : pyspark.sql.DataFrame
+        Dataframe to be written.
+    write : typing.Literal["csv" ,"parquet", "hive"]
+        The format in which data is to be written.
+    path : str
+        The path or database to which dataframe is to be written.
+    file_name : str, optional
+        The file or table name under which dataframe is to be saved.
+        Note that if None, function will write to the HDFS path
+        specified in case of csv or parquet. Defaults to None.
+    sep : str, optional
+        Specified separator for data in csv format. Defaults to ","
+    header : typing.Literal["true", "false"], optional
+        Boolean indicating whether or not data will include a header.
+        Defaults to "true".
+    mode : typing.Literal["overwrite", "append"], optional
+        Choice to overwrite existing file or table or to append new data
+        into it. Defaults to "overwrite".
 
     Returns
     -------
-    list[Any]
+    file or table
+        Written version of DataFrame in specified format.
+
+    Examples
+    --------
+    >>> write_format(
+    ...     df, write="parquet", path="user/edwara5/simpsons.parquet", mode="overwrite"
+    ... )
     """
-    return [
-        _list[i * _num : (i + 1) * _num] for i in range((len(_list) + _num - 1) // _num)
-    ]
+    if file_name is None:
+        if write == "csv":
+            df.write.format("csv").option("header", header).mode(mode).option(
+                "sep", sep
+            ).save(f"{path}")
+        if write == "parquet":
+            df.write.parquet(path=f"{path}", mode=mode)
+        if write == "hive":
+            df.write.mode("overwrite").saveAsTable(f"{path}")
+
+    else:
+        if write == "csv":
+            df.write.format("csv").option("header", header).mode(mode).option(
+                "sep", sep
+            ).save(f"{path}/{file_name}")
+        if write == "parquet":
+            df.write.parquet(path=f"{path}/{file_name}", mode=mode)
+        if write == "hive":
+            df.write.mode("overwrite").saveAsTable(f"{path}.{file_name}")
