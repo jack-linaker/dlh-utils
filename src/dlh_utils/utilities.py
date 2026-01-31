@@ -9,7 +9,7 @@ import subprocess
 from typing import Any, Literal
 
 import pandas as pd
-import pyspark.sql.functions as F
+import pyspark.sql.functions as sf
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.types import (
     DoubleType,
@@ -22,7 +22,7 @@ from pyspark.sql.types import (
     TimestampType,
 )
 
-from dlh_utils import dataframes as da
+from dlh_utils import dataframes
 
 
 def chunk_list(_list: list[Any], _num: int) -> list[Any]:
@@ -63,8 +63,8 @@ def clone_hive_table(
     spark = SparkSession.builder.getOrCreate()
 
     spark.sql(
-        f"CREATE TABLE {database}.{new_table}{suffix} \
-              AS SELECT * FROM {database}.{table_name}"
+        f"CREATE TABLE {database}.{new_table}{suffix} AS SELECT * FROM "
+        f"{database}.{table_name}"
     )
 
 
@@ -85,10 +85,7 @@ def create_hive_table(df: DataFrame, database: str, table_name: str) -> None:
     spark = SparkSession.builder.getOrCreate()
 
     df.createOrReplaceTempView("tempTable")
-    spark.sql(
-        f"CREATE TABLE {database}.{table_name} AS \
-              SELECT * FROM tempTable"
-    )
+    spark.sql(f"CREATE TABLE {database}.{table_name} AS SELECT * FROM tempTable")
 
 
 def describe_metrics(
@@ -112,7 +109,7 @@ def describe_metrics(
     ----------
     df : pyspark.sql.DataFrame
         DataFrame to produce descriptive metrics about.
-    output_mode: typing.Literal["pandas", "spark"], optional
+    output_mode : {"pandas", "spark"}, optional
         The type of DataFrame to return. Defaults to "pandas".
 
     Returns
@@ -137,21 +134,21 @@ def describe_metrics(
     +-----------+------+-----+--------+----------------+----+------------+--------+----------------+
     """
     distinct_df = df.agg(
-        *(F.countDistinct(F.col(c)).alias(c) for c in df.columns)
-    ).withColumn("summary", F.lit("distinct"))
+        *(sf.countDistinct(sf.col(c)).alias(c) for c in df.columns)
+    ).withColumn("summary", sf.lit("distinct"))
     null_df = df.agg(
         *(
-            F.count(F.when(F.isnan(F.col(c)) | F.col(c).isNull(), c)).alias(c)
+            sf.count(sf.when(sf.isnan(sf.col(c)) | sf.col(c).isNull(), c)).alias(c)
             for c in df.columns
         )
-    ).withColumn("summary", F.lit("null"))
+    ).withColumn("summary", sf.lit("null"))
 
-    describe_df = da.union_all(distinct_df, null_df).persist()
+    describe_df = dataframes.union_all(distinct_df, null_df).persist()
 
     count = df.count()
 
     types = df.dtypes
-    types = dict(zip([x[0] for x in types], [x[1] for x in types]))
+    types = dict(zip([x[0] for x in types], [x[1] for x in types], strict=False))
 
     describe_df = describe_df.toPandas()
     describe_df = describe_df.transpose().reset_index()
@@ -234,7 +231,11 @@ def list_checkpoints(checkpoint: str) -> list[str]:
 
 
 def list_files(
-    file_path: str, walk: bool = False, regex: str | None = None, full_path: bool = True
+    file_path: str,
+    regex: str | None = None,
+    *,
+    walk: bool = False,
+    full_path: bool = True,
 ) -> list[str]:
     """List files in HDFS directory.
 
@@ -245,13 +246,13 @@ def list_files(
     ----------
     file_path : str
         String path of directory.
+    regex : str, optional
+        Use regex to find certain words within the listed files.
+        Defaults to None.
     walk : bool, optional
         When False, lists files only in immediate directory specified.
         When True, lists all files in immediate directory and all
         subfolders. Defaults to False.
-    regex : str, optional
-        Use regex to find certain words within the listed files.
-        Defaults to None.
     full_path : bool, optional
         When True, show full file path. When False, show just files.
         Defaults to True.
@@ -276,7 +277,7 @@ def list_files(
             stderr=subprocess.PIPE,
         )
 
-    std_out, std_error = process.communicate()
+    std_out, _std_error = process.communicate()
 
     try:
         std_out = str(std_out).split("\\n")[:-1]
@@ -343,7 +344,7 @@ def most_recent(
     ----------
     path : str
         The path or database which will be searched.
-    filetype : typing.Literal["csv", "parquet", "hive"]
+    filetype : {"csv", "parquet", "hive"}
         The format of data that is to be searched for.
     regex : str, optional
         A regular expression to filter the search results by, eg "^VOA".
@@ -351,7 +352,7 @@ def most_recent(
 
     Returns
     -------
-    tuple[str, typing.Literal["csv", "parquet", "hive"]]
+    tuple[str, {"csv", "parquet", "hive"}]
         The filepath or table reference for most recent data, and the
         format of the data for which a filepath has been returned.
 
@@ -367,27 +368,28 @@ def most_recent(
     >>> most_recent(path="baby_names", filetype="hive", regex="std$")
     ('baby_names.bv_girl_names_std', 'hive')
     """
-    # pass spark context to function
+    # Pass spark context to function.
     spark = SparkSession.builder.getOrCreate()
 
     if regex is None:
         if filetype == "hive":
             try:
-                # list all tables in directory
+                # List all tables in directory.
                 tables = spark.sql(f"SHOW TABLES IN {path}").select("tableName")
 
-                # create full filepath from directory & table name
+                # Create full filepath from directory & table name.
                 filepaths = tables.withColumn(
-                    "path", F.concat(F.lit(path), F.lit("."), F.col("tableName"))
+                    "path", sf.concat(sf.lit(path), sf.lit("."), sf.col("tableName"))
                 )
 
-                # convert to list
+                # Convert to list.
                 filepaths = list(filepaths.select("path").toPandas()["path"])
 
-                # initialise empty dictionary
+                # Initialise empty dictionary.
                 filepath_dict = {}
 
-                # loop through paths, appending path and time to dictionary
+                # Loop through paths, appending path and time to
+                # dictionary.
                 for filepath in filepaths:
                     time = spark.sql(
                         f"SHOW tblproperties {filepath} ('transient_lastDdlTime')"
@@ -395,7 +397,8 @@ def most_recent(
 
                     filepath_dict.update({filepath: time})
 
-                # sort by max time since epoch and return corresponding path
+                # Sort by max time since epoch and return corresponding
+                # path.
                 most_recent_filepath = max(filepath_dict, key=filepath_dict.get)
 
             except Exception as exc:
@@ -403,24 +406,25 @@ def most_recent(
                     filetype + " file not found in this directory: " + path
                 ) from exc
 
-        # if filetype != hive
+        # If filetype != hive.
         else:
-            # return all files in dir recursively, sorted by modification date (ascending),
-            # decode from bytes-like to str
+            # Return all files in dir recursively, sorted by
+            # modification date (ascending), decode from bytes-like to
+            # str.
             files = subprocess.check_output(
                 ["hdfs", "dfs", "-ls", "-R", "-t", "-C", path]
             ).decode()
 
-            # split by newline to return list of old -> new files
+            # Split by newline to return list of old -> new files.
             files = files.split("\n")
 
             if filetype == "csv":
                 try:
-                    # filter for .csv ext and take last element of list
+                    # Filter for .csv ext and take last element of list.
                     result = [f for f in files if f.endswith("csv")][-1]
 
-                    # return path up until last '/'
-                    most_recent_filepath = re.search(".*\/", result).group(0)
+                    # Return path up until last '/'.
+                    most_recent_filepath = re.search(r".*\/", result).group(0)
 
                 except Exception as exc:
                     raise FileNotFoundError(
@@ -429,41 +433,41 @@ def most_recent(
 
             elif filetype == "parquet":
                 try:
-                    # filter for .csv ext and take last element of list
+                    # Filter for .csv ext and take last element of list.
                     result = [f for f in files if f.endswith("parquet")][-1]
 
-                    # return path up until last '/'
-                    most_recent_filepath = re.search(".*\/", result).group(0)
+                    # Return path up until last '/'.
+                    most_recent_filepath = re.search(r".*\/", result).group(0)
 
                 except Exception as exc:
                     raise FileNotFoundError(
                         filetype + " file not found in this directory: " + path
                     ) from exc
 
-    # if regex argument specified:
+    # If regex argument specified.
     else:
         if filetype == "hive":
             try:
-                # list all tables in directory
+                # List all tables in directory.
                 tables = spark.sql(f"SHOW TABLES IN {path}").select("tableName")
 
-                # create full filepath from directory & table name
+                # Create full filepath from directory & table name.
                 filepaths = tables.withColumn(
-                    "path", F.concat(F.lit(path), F.lit("."), F.col("tableName"))
+                    "path", sf.concat(sf.lit(path), sf.lit("."), sf.col("tableName"))
                 )
 
-                # filter filepaths based on regex
+                # Filter filepaths based on regex.
                 filtered_filepaths = filepaths.filter(filepaths["path"].rlike(regex))
 
-                # convert to list
+                # Convert to list.
                 filtered_filepaths = list(
                     filtered_filepaths.select("path").toPandas()["path"]
                 )
 
-                # initialise empty dictionary
+                # Initialise empty dictionary.
                 filepath_dict = {}
 
-                # loop through paths, appending path and time to dict
+                # Loop through paths, appending path and time to dict.
                 for filepath in filtered_filepaths:
                     time = spark.sql(
                         f"SHOW tblproperties {filepath} ('transient_lastDdlTime')"
@@ -471,7 +475,8 @@ def most_recent(
 
                     filepath_dict.update({filepath: time})
 
-                # sort by max time since epoch and return corresponding path
+                # Sort by max time since epoch and return corresponding
+                # path.
                 most_recent_filepath = max(filepath_dict, key=filepath_dict.get)
 
             except Exception as exc:
@@ -483,29 +488,30 @@ def most_recent(
                     + path
                 ) from exc
 
-        # if filetype != hive
+        # If filetype != hive.
         else:
-            # return all files in dir recursively, sorted by modification date (ascending),
-            # decode from bytes-like to str
+            # Return all files in dir recursively, sorted by
+            # modification date (ascending), decode from bytes-like to
+            # str.
             files = subprocess.check_output(
                 ["hdfs", "dfs", "-ls", "-R", "-t", "-C", path]
             ).decode()
 
-            # split by newline to return list of old -> new files
+            # Split by newline to return list of old -> new files.
             files = files.split("\n")
 
             r = re.compile(regex)
 
-            # apply regex filter
+            # APply regex filter.
             filtered_files = list(filter(r.match, files))
 
             if filetype == "csv":
                 try:
-                    # filter for .csv ext and take last element of list
+                    # Filter for .csv ext and take last element of list.
                     result = [f for f in filtered_files if f.endswith("csv")][-1]
 
-                    # return path up until last '/'
-                    most_recent_filepath = re.search(".*\/", result).group(0)
+                    # Return path up until last '/'.
+                    most_recent_filepath = re.search(R".*\/", result).group(0)
 
                 except Exception as exc:
                     raise FileNotFoundError(
@@ -518,11 +524,11 @@ def most_recent(
 
             elif filetype == "parquet":
                 try:
-                    # filter for .csv ext and take last element of list
+                    # Filter for .csv ext and take last element of list.
                     result = [f for f in filtered_files if f.endswith("parquet")][-1]
 
-                    # return path up until last '/'
-                    most_recent_filepath = re.search(".*\/", result).group(0)
+                    # Return path up until last '/'.
+                    most_recent_filepath = re.search(R".*\/", result).group(0)
 
                 except Exception as exc:
                     raise FileNotFoundError(
@@ -550,7 +556,9 @@ def pandas_to_spark(pandas_df: pd.DataFrame) -> DataFrame:
         A Spark DataFrame.
     """
 
-    def equivalent_type(_format):
+    def equivalent_type(
+        _format: str,
+    ) -> TimestampType | LongType | IntegerType | DoubleType | FloatType | StringType:
         if _format == "datetime64[ns]":
             return TimestampType()
 
@@ -568,24 +576,24 @@ def pandas_to_spark(pandas_df: pd.DataFrame) -> DataFrame:
 
         return StringType()
 
-    def define_structure(string, format_type):
+    def define_structure(string: str, format_type: str) -> StructField:
         try:
-            vartype = equivalent_type(format_type)
+            var_type = equivalent_type(format_type)
 
         except TypeError:
-            vartype = StringType()
+            var_type = StringType()
 
-        return StructField(string, vartype)
+        return StructField(string, var_type)
 
     spark = SparkSession.builder.getOrCreate()
 
     columns = list(pandas_df.columns)
     types = list(pandas_df.dtypes)
 
-    struct_list = []
+    struct_list: list[StructField] = []
 
-    for column, vartype in zip(columns, types):
-        struct_list.append(define_structure(column, vartype))
+    for column, var_type in zip(columns, types, strict=False):
+        struct_list.append(define_structure(column, var_type))
 
     p_schema = StructType(struct_list)
 
@@ -607,7 +615,7 @@ def read_format(
 
     Parameters
     ----------
-    read : typing.Literal["csv", "parquet", "hive"]
+    read : {"csv", "parquet", "hive"}
         The format from which data is to be read.
     path : str, optional
         The path or database from which DataFrame is to be read.
@@ -618,10 +626,10 @@ def read_format(
         case of csv or parquet. Defaults to None.
     sep : str, optional
         Specified separator for data in csv format. Defaults to ",".
-    header : typing.Literal["true", "false"], optional
+    header : {"true", "false"}, optional
         Boolean indicating whether or not data will be read to include a
         header. Defaults to "true".
-    infer_schema : typing.Literal["True", "False"], optional
+    infer_schema : {"True", "False"}, optional
         Boolean indicating whether data should be read with inferred
         data types and schema. If false, all data will read as string
         format. Defaults to "True".
@@ -742,7 +750,7 @@ def regex_match(
 
     counts_df = sample_df.groupBy().agg(
         *[
-            F.sum(F.when(F.col(col).rlike(regex), 1)).alias(col)
+            sf.sum(sf.when(sf.col(col).rlike(regex), 1)).alias(col)
             for col in sample_df.columns
         ]
     )
@@ -849,7 +857,7 @@ def value_counts(
         DataFrame to produce summary counts from.
     limit : int, optional
         The top n values to search for. Defaults to 20.
-    output_mode: typing.Literal["pandas", "spark"], optional
+    output_mode : {"pandas", "spark"}, optional
         The type of DataFrame to return. Defaults to "pandas".
 
     Returns
@@ -872,7 +880,7 @@ def value_counts(
     +---+--------+--------+--------------+-----------+-----------------+-------+-------------+
     """
 
-    def value_count(df, col, limit):
+    def value_count(df: DataFrame, col: str, limit: int) -> pd.DataFrame:
         return (
             df.groupBy(col)
             .count()
@@ -884,7 +892,7 @@ def value_counts(
 
     dfs = [value_count(df, col, limit) for col in df.columns]
 
-    def make_limit(df, limit):
+    def make_limit(df: pd.DataFrame, limit: int) -> pd.DataFrame:
         count = df.shape[0]
 
         if count < limit:
@@ -926,7 +934,7 @@ def write_format(
     ----------
     df : pyspark.sql.DataFrame
         Dataframe to be written.
-    write : typing.Literal["csv" ,"parquet", "hive"]
+    write : {"csv", "parquet", "hive"}
         The format in which data is to be written.
     path : str
         The path or database to which dataframe is to be written.
@@ -936,10 +944,10 @@ def write_format(
         specified in case of csv or parquet. Defaults to None.
     sep : str, optional
         Specified separator for data in csv format. Defaults to ","
-    header : typing.Literal["true", "false"], optional
+    header : {"true", "false"}, optional
         Boolean indicating whether or not data will include a header.
         Defaults to "true".
-    mode : typing.Literal["overwrite", "append"], optional
+    mode : {"overwrite", "append"}, optional
         Choice to overwrite existing file or table or to append new data
         into it. Defaults to "overwrite".
 

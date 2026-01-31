@@ -2,11 +2,11 @@
 
 from typing import Any, Literal
 
-import pyspark.sql.functions as F
+import pyspark.sql.functions as sf
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.types import IntegerType, StringType, StructField, StructType
 
-from dlh_utils import dataframes as da
+from dlh_utils import dataframes
 
 
 def add_leading_zeros(df: DataFrame, subset: str | list[str], n: int) -> DataFrame:
@@ -61,7 +61,7 @@ def add_leading_zeros(df: DataFrame, subset: str | list[str], n: int) -> DataFra
         subset = [subset]
 
     for col in subset:
-        df = df.withColumn(col, F.lpad(F.col(col), n, "0"))
+        df = df.withColumn(col, sf.lpad(sf.col(col), n, "0"))
 
     return df
 
@@ -70,7 +70,7 @@ def age_at(
     df: DataFrame,
     reference_col: str,
     in_date_format: str = "dd-MM-yyyy",
-    *age_at_dates: list[str],
+    *age_at_dates: list[str] | str,
 ) -> DataFrame:
     """Compute ages at given dates from a DOB column, adding columns.
 
@@ -129,27 +129,25 @@ def age_at(
     +---+--------+-------+----------+---+---------------------+---------------------+
     """
     df = df.withColumn(
-        f"{reference_col}_fmt", F.unix_timestamp(F.col(reference_col), in_date_format)
+        f"{reference_col}_fmt", sf.unix_timestamp(sf.col(reference_col), in_date_format)
     ).withColumn(
         f"{reference_col}_fmt",
-        F.from_unixtime(F.col(f"{reference_col}_fmt"), "yyyy-MM-dd"),
+        sf.from_unixtime(sf.col(f"{reference_col}_fmt"), "yyyy-MM-dd"),
     )
 
     for age_at_date in age_at_dates:
         df = df.withColumn(
             f"{reference_col}_age_at_{age_at_date}",
             (
-                F.months_between(
-                    F.lit(age_at_date),
-                    F.col(f"{reference_col}_fmt"),
+                sf.months_between(
+                    sf.lit(age_at_date),
+                    sf.col(f"{reference_col}_fmt"),
                 )
-                / F.lit(12)
+                / sf.lit(12)
             ).cast(IntegerType()),
         )
 
-    df = df.drop(f"{reference_col}_fmt")
-
-    return df
+    return df.drop(f"{reference_col}_fmt")
 
 
 def align_forenames(
@@ -196,25 +194,23 @@ def align_forenames(
     --------
     dataframes.concat()
     """
-    out = df.where(~(F.col(first_name).contains(sep)) | (F.col(first_name).isNull()))
-    df = df.where(F.col(first_name).contains(sep))
+    out = df.where(~(sf.col(first_name).contains(sep)) | (sf.col(first_name).isNull()))
+    df = df.where(sf.col(first_name).contains(sep))
 
-    df = da.concat(df, "align_forenames", sep, [first_name, middle_name])
+    df = dataframes.concat(df, "align_forenames", sep, [first_name, middle_name])
 
     df = df.withColumn(
-        first_name, F.regexp_extract(F.col("align_forenames"), "([^\s]+)", 1)
+        first_name, sf.regexp_extract(sf.col("align_forenames"), r"([^\s]+)", 1)
     )
     df = df.withColumn(
-        middle_name, F.regexp_extract(F.col("align_forenames"), "(\s)(.*)", 2)
+        middle_name, sf.regexp_extract(sf.col("align_forenames"), r"(\s)(.*)", 2)
     )
 
     df = df.drop("align_forenames")
 
     df = out.unionByName(df)
 
-    df = df.repartition(identifier)
-
-    return df
+    return df.repartition(identifier)
 
 
 def cast_type(
@@ -283,7 +279,7 @@ def cast_type(
 
     for col in subset:
         if df.select(col).dtypes[0][1] != types:
-            df = df.withColumn(col, F.col(col).cast(types))
+            df = df.withColumn(col, sf.col(col).cast(types))
     return df
 
 
@@ -324,7 +320,7 @@ def clean_forename(df: DataFrame, subset: str | list[str]) -> DataFrame:
         subset = [subset]
 
     for col in subset:
-        df = df.withColumn(col, F.regexp_replace(F.col(col), forename_regex, ""))
+        df = df.withColumn(col, sf.regexp_replace(sf.col(col), forename_regex, ""))
 
     return df
 
@@ -360,10 +356,10 @@ def clean_hyphens(df: DataFrame, subset: str | list[str] | None = None) -> DataF
 
     for col in subset:
         df = df.withColumn(
-            col, F.regexp_replace(F.col(col), "[ ]+[-]+[ ]+|[-]+[ ]+|[ ]+[-]", "-")
+            col, sf.regexp_replace(sf.col(col), "[ ]+[-]+[ ]+|[-]+[ ]+|[ ]+[-]", "-")
         )
 
-        df = df.withColumn(col, F.regexp_replace(F.col(col), "^[-]+|[-]+$", ""))
+        df = df.withColumn(col, sf.regexp_replace(sf.col(col), "^[-]+|[-]+$", ""))
 
     return df
 
@@ -425,13 +421,13 @@ def clean_surname(df: DataFrame, subset: str | list[str]) -> DataFrame:
         subset = [subset]
 
     for col in subset:
-        df = df.withColumn(col, F.regexp_replace(F.col(col), surname_regex, ""))
+        df = df.withColumn(col, sf.regexp_replace(sf.col(col), surname_regex, ""))
 
     return df
 
 
 def fill_nulls(
-    df: DataFrame, fill: str | None, subset: str | list[str] | None = None
+    df: DataFrame, fill: Any, subset: str | list[str] | None = None
 ) -> DataFrame:
     """Fill null and NaN with specified value.
 
@@ -439,7 +435,7 @@ def fill_nulls(
     ----------
     df : pyspark.sql.DataFrame
         DataFrame to which the function is applied.
-    fill : str, optional
+    fill : optional
         This is the value the NaN/Null values are replaced by. The data
         type of the fill value must match that of the column it is
         replacing values within.
@@ -488,8 +484,8 @@ def fill_nulls(
     for col in subset:
         df = df.withColumn(
             col,
-            F.when((F.col(col).isNull()) | (F.isnan(F.col(col))), fill).otherwise(
-                F.col(col)
+            sf.when((sf.col(col).isNull()) | (sf.isnan(sf.col(col))), fill).otherwise(
+                sf.col(col)
             ),
         )
 
@@ -499,6 +495,7 @@ def fill_nulls(
 def group_single_characters(
     df: DataFrame,
     subset: str | list[str] | None = None,
+    *,
     include_terminals: bool = False,
 ) -> DataFrame:
     """Remove spaces between single characters.
@@ -542,7 +539,7 @@ def group_single_characters(
         regex += r"|(?<=\w)[ ]+(?=\w$)"  # Final single letter
 
     for col in subset:
-        df = df.withColumn(col, F.regexp_replace(F.col(col), regex, ""))
+        df = df.withColumn(col, sf.regexp_replace(sf.col(col), regex, ""))
 
     return df
 
@@ -610,14 +607,14 @@ def max_hyphen(
     for col in subset:
         df = (
             df.withColumn(
-                "space_count", F.length(F.regexp_replace(F.col(col), "[^-]", ""))
+                "space_count", sf.length(sf.regexp_replace(sf.col(col), "[^-]", ""))
             )
             .withColumn(
                 col,
-                F.when(
-                    F.col("space_count") > limit,
-                    F.regexp_replace(F.col(col), r"(-)\1{1,}", number_hyphens),
-                ).otherwise(F.col(col)),
+                sf.when(
+                    sf.col("space_count") > limit,
+                    sf.regexp_replace(sf.col(col), r"(-)\1{1,}", number_hyphens),
+                ).otherwise(sf.col(col)),
             )
             .drop("space_count")
         )
@@ -686,13 +683,14 @@ def max_white_space(
     for col in subset:
         df = (
             df.withColumn(
-                "space_count", F.length(F.regexp_replace(F.col(col), "[^ ]", ""))
+                "space_count", sf.length(sf.regexp_replace(sf.col(col), "[^ ]", ""))
             )
             .withColumn(
                 col,
-                F.when(
-                    F.col("space_count") > limit, F.regexp_replace(F.col(col), " ", "")
-                ).otherwise(F.col(col)),
+                sf.when(
+                    sf.col("space_count") > limit,
+                    sf.regexp_replace(sf.col(col), " ", ""),
+                ).otherwise(sf.col(col)),
             )
             .drop("space_count")
         )
@@ -701,7 +699,7 @@ def max_white_space(
 
 
 def reg_replace(
-    df: DataFrame, replace_dict: dict, subset: str | list[str] | None = None
+    df: DataFrame, replace_dict: dict[Any, Any], subset: str | list[str] | None = None
 ) -> DataFrame:
     """Replace values within DataFrame columns using regex.
 
@@ -734,41 +732,41 @@ def reg_replace(
     if subset is not None:
         for col in subset:
             for key, val in replace_dict.items():
-                df = df.withColumn(col, F.regexp_replace(F.col(col), val, key))
+                df = df.withColumn(col, sf.regexp_replace(sf.col(col), val, key))
 
     return df
 
 
-def remove_punct(
+def remove_punctuation(
     df: DataFrame,
     subset: str | list[str] | None = None,
     keep: str | list[str] | None = None,
 ) -> DataFrame:
     """Remove punctuation from strings.
 
-    Where the keep value is set, it will remove all punctuation
-    from given columns other than the punctuation value set by
-    the keep argument.
+    Where the keep value is set, it will remove all punctuation from
+    given columns other than the punctuation value set by the keep
+    argument.
 
     Parameters
     ----------
     df : pyspark.sql.DataFrame
         DataFrame to which the function is applied.
     subset : str | list[str], optional
-        The subset is the column(s) on which the function is applied.
-        If None the function applies to the whole DataFrame. Defaults to None.
-    keep: str | list[str], optional
-        Can be set to a string with a symbol you want to keep, e.g.
-        if you want to keep the addition symbol set keep = '+' and
-        it will refrain from removing the + symbol from the
-        subset of columns. Defaults to None.
+        The subset is the column(s) on which the function is applied. If
+        None the function applies to the whole DataFrame. Defaults to
+        None.
+    keep : str | list[str], optional
+        Can be set to a string with a symbol you want to keep, e.g. if
+        you want to keep the addition symbol set keep = '+' and it will
+        refrain from removing the + symbol from the subset of columns.
+        Defaults to None.
 
     Returns
     -------
     pyspark.sql.DataFrame
         DataFrame with the same columns but with the
-        `remove_punct` function applied to the specified
-        columns.
+        `remove_punctuation` function applied to the specified columns.
 
     Example
     -------
@@ -783,7 +781,7 @@ def remove_punct(
     |  4|    Lisa|      Marie|  Simpson|2014-05-09|  F|ET74 2SP|
     |  5| Ma'ggie|       null|Simp--son|2021-01-12|  F|ET74 2SP|
     +---+--------+-----------+---------+----------+---+--------+
-    >>> remove_punct(df, subset=None, keep=None).show()
+    >>> remove_punctuation(df, subset=None, keep=None).show()
     +---+--------+-----------+-------+--------+---+--------+
     | ID|Forename|Middle_name|Surname|     DoB|Sex|Postcode|
     +---+--------+-----------+-------+--------+---+--------+
@@ -808,14 +806,15 @@ def remove_punct(
         regex = "[^A-Za-z0-9 ]"
 
     for x in subset:
-        df = df.withColumn(x, F.regexp_replace(F.col(x), regex, ""))
+        df = df.withColumn(x, sf.regexp_replace(sf.col(x), regex, ""))
     return df
 
 
 def replace(
     df: DataFrame,
     subset: str | list[str],
-    replace_dict: dict,
+    replace_dict: dict[Any, Any],
+    *,
     use_join: bool = False,
     use_regex: bool = False,
 ) -> DataFrame:
@@ -881,16 +880,18 @@ def replace(
     +---+---------+-----------+-------+----------+---+--------+
     """
     if use_join and use_regex:
-        raise ValueError(
+        error_message = (
             "Can't call replace() with True values for both use_join and use_regex."
         )
+        raise ValueError(error_message)
     if use_join:
         for k, i in replace_dict.items():
             if k is None or i is None:
-                raise ValueError(
-                    "Join mode (use_join=True) is not compatible with the use of None\
-                                 in the replace dictionary. Set use_join=True to use None values."
+                error_message = (
+                    "Join mode (use_join=True) is not compatible with the use of None "
+                    "in the replace dictionary. Set use_join=True to use None values."
                 )
+                raise ValueError(error_message)
 
     if not isinstance(subset, list):
         subset = [subset]
@@ -899,8 +900,8 @@ def replace(
         spark = SparkSession.builder.getOrCreate()
         schema = StructType(
             [
-                StructField("_replace_dict_element_before", StringType(), True),
-                StructField("_replace_dict_element_after", StringType(), True),
+                StructField("_replace_dict_element_before", StringType()),
+                StructField("_replace_dict_element_after", StringType()),
             ]
         )
         replace_df = spark.createDataFrame(replace_dict.items(), schema)
@@ -911,7 +912,7 @@ def replace(
                 how="left",
             )
             df = df.withColumn(
-                col, F.coalesce(df["_replace_dict_element_after"], df[col])
+                col, sf.coalesce(df["_replace_dict_element_after"], df[col])
             )
             df = df.drop("_replace_dict_element_before", "_replace_dict_element_after")
     else:
@@ -920,12 +921,14 @@ def replace(
                 if use_regex:
                     df = df.withColumn(
                         col,
-                        F.when(F.col(col).rlike(before), after).otherwise(F.col(col)),
+                        sf.when(sf.col(col).rlike(before), after).otherwise(
+                            sf.col(col)
+                        ),
                     )
                 else:
                     df = df.withColumn(
                         col,
-                        F.when(F.col(col).like(before), after).otherwise(F.col(col)),
+                        sf.when(sf.col(col).like(before), after).otherwise(sf.col(col)),
                     )
 
     return df
@@ -951,7 +954,7 @@ def standardise_case(
         The subset is the column(s) on which the function is applied. If
         None the function applies to the whole DataFrame. Defaults to
         None.
-    val : typing.Literal["upper", "lower", "title"], optional
+    val : {"upper", "lower", "title"}, optional
         Takes three types of string values and changes the values in the
         subset columns to the case type respectively. Defaults to
         "upper".
@@ -993,15 +996,12 @@ def standardise_case(
         subset = [subset]
 
     for col in subset:
-        if val == "upper":
-            if df.select(col).dtypes[0][1] == "string":
-                df = df.withColumn(col, F.upper(F.col(col)))
-        if val == "lower":
-            if df.select(col).dtypes[0][1] == "string":
-                df = df.withColumn(col, F.lower(F.col(col)))
-        if val == "title":
-            if df.select(col).dtypes[0][1] == "string":
-                df = df.withColumn(col, F.initcap(F.col(col)))
+        if val == "upper" and df.select(col).dtypes[0][1] == "string":
+            df = df.withColumn(col, sf.upper(sf.col(col)))
+        if val == "lower" and df.select(col).dtypes[0][1] == "string":
+            df = df.withColumn(col, sf.lower(sf.col(col)))
+        if val == "title" and df.select(col).dtypes[0][1] == "string":
+            df = df.withColumn(col, sf.initcap(sf.col(col)))
     return df
 
 
@@ -1010,6 +1010,7 @@ def standardise_date(
     col_name: str,
     in_date_format: str = "dd-MM-yyyy",
     out_date_format: str = "yyyy-MM-dd",
+    *,
     null_counts: bool = False,
 ) -> DataFrame:
     """Change the date format of a specified date column.
@@ -1106,18 +1107,17 @@ def standardise_date(
     (0, 1)
     """
     if null_counts:
-        null_before = df.where(F.col(col_name).isNull()).count()
+        null_before = df.where(sf.col(col_name).isNull()).count()
 
-    df = df.withColumn(col_name, F.unix_timestamp(F.col(col_name), in_date_format))
-    df = df.withColumn(col_name, F.from_unixtime(F.col(col_name), out_date_format))
+    df = df.withColumn(col_name, sf.unix_timestamp(sf.col(col_name), in_date_format))
+    df = df.withColumn(col_name, sf.from_unixtime(sf.col(col_name), out_date_format))
 
     if null_counts:
-        null_after = df.where(F.col(col_name).isNull()).count()
+        null_after = df.where(sf.col(col_name).isNull()).count()
 
         return df, (null_before, null_after)
 
-    else:
-        return df
+    return df
 
 
 def standardise_null(
@@ -1125,6 +1125,7 @@ def standardise_null(
     replace: Any,
     subset: str | list[str] | None = None,
     replace_with: Any = None,
+    *,
     regex: bool = True,
 ) -> DataFrame:
     """Cast values used as nulls to None type (true null).
@@ -1198,8 +1199,8 @@ def standardise_null(
         for column in subset:
             df = df.withColumn(
                 column,
-                F.when(F.col(column).rlike(replace), replace_with).otherwise(
-                    F.col(column)
+                sf.when(sf.col(column).rlike(replace), replace_with).otherwise(
+                    sf.col(column)
                 ),
             )
 
@@ -1207,8 +1208,8 @@ def standardise_null(
         for column in subset:
             df = df.withColumn(
                 column,
-                F.when(F.col(column).like(replace), replace_with).otherwise(
-                    F.col(column)
+                sf.when(sf.col(column).like(replace), replace_with).otherwise(
+                    sf.col(column)
                 ),
             )
 
@@ -1236,7 +1237,7 @@ def standardise_white_space(
         The subset of columns that are having their white space
         characters changed. If this is left blank then it defaults to
         all columns. Defaults to None.
-    wsl : typing.Literal["one", "none"], optional
+    wsl : {"one", "none"}, optional
         wsl stands for white space level, which is used to indicate what
         the user would like white space to be replaced with. 'one'
         replaces multiple whitespaces with single whitespace. 'none'
@@ -1258,19 +1259,16 @@ def standardise_white_space(
         subset = [subset]
 
     for col in subset:
-        if fill is not None:
-            if df.select(col).dtypes[0][1] == "string":
-                df = df.withColumn(col, F.trim(F.col(col)))
-                df = df.withColumn(col, F.regexp_replace(F.col(col), "\\s+", fill))
+        if fill is not None and df.select(col).dtypes[0][1] == "string":
+            df = df.withColumn(col, sf.trim(sf.col(col)))
+            df = df.withColumn(col, sf.regexp_replace(sf.col(col), "\\s+", fill))
 
-        elif wsl == "none":
-            if df.select(col).dtypes[0][1] == "string":
-                df = df.withColumn(col, F.trim(F.col(col)))
-                df = df.withColumn(col, F.regexp_replace(F.col(col), "\\s+", ""))
-        elif wsl == "one":
-            if df.select(col).dtypes[0][1] == "string":
-                df = df.withColumn(col, F.trim(F.col(col)))
-                df = df.withColumn(col, F.regexp_replace(F.col(col), "\\s+", " "))
+        elif wsl == "none" and df.select(col).dtypes[0][1] == "string":
+            df = df.withColumn(col, sf.trim(sf.col(col)))
+            df = df.withColumn(col, sf.regexp_replace(sf.col(col), "\\s+", ""))
+        elif wsl == "one" and df.select(col).dtypes[0][1] == "string":
+            df = df.withColumn(col, sf.trim(sf.col(col)))
+            df = df.withColumn(col, sf.regexp_replace(sf.col(col), "\\s+", " "))
 
     return df
 
@@ -1326,10 +1324,10 @@ def trim(df: DataFrame, subset: str | list[str] | None = None) -> DataFrame:
 
     types = [x for x in df.dtypes if x[0] in subset]
 
-    types = dict(zip([x[0] for x in types], [x[1] for x in types]))
+    types = dict(zip([x[0] for x in types], [x[1] for x in types], strict=False))
 
     for col in subset:
         if types[col] == "string":
-            df = df.withColumn(col, F.trim(F.col(col)))
+            df = df.withColumn(col, sf.trim(sf.col(col)))
 
     return df

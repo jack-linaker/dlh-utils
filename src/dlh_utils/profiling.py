@@ -1,15 +1,14 @@
 """Profiling functions used to produce summaries of data."""
 
 import re
-from typing import Literal
+from typing import Any, Literal
 
 import pandas as pd
-import pyspark.sql.functions as F
+import pyspark.sql.functions as sf
 from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql.types import IntegerType, StringType
 
-from dlh_utils import dataframes as da
-from dlh_utils import utilities as ut
+from dlh_utils import dataframes, utilities
 
 
 def create_table_statements(
@@ -33,7 +32,7 @@ def create_table_statements(
         Database to be queried.
     regex : str, optional
         Regex pattern to match Hive tables against. Defaults to None.
-    output_mode : typing.Literal["pandas", "spark"], optional
+    output_mode : {"pandas", "spark"}, optional
         Whether to output a Pandas or Spark DataFrame. Defaults to
         "spark".
 
@@ -45,7 +44,7 @@ def create_table_statements(
     """
     spark = SparkSession.builder.getOrCreate()
 
-    tables = ut.list_tables(database)
+    tables = utilities.list_tables(database)
 
     if regex is not None:
         tables = list(filter(re.compile(regex).match, tables))
@@ -55,7 +54,7 @@ def create_table_statements(
             [
                 (
                     spark.sql(f"SHOW CREATE TABLE {database}.{table}")
-                    .withColumn("table", F.lit(table))
+                    .withColumn("table", sf.lit(table))
                     .toPandas()
                 )
                 for table in tables
@@ -71,8 +70,9 @@ def create_table_statements(
 def df_describe(
     df: DataFrame,
     output_mode: Literal["pandas", "spark"] = "pandas",
-    approx_distinct: bool = False,
     rsd: float = 0.05,
+    *,
+    approx_distinct: bool = False,
 ) -> DataFrame | pd.DataFrame:
     """Profile DataFrame variables: type, length, distinctness, nulls.
 
@@ -87,16 +87,16 @@ def df_describe(
     ----------
     df : pyspark.sql.DataFrame
         Data to be summarised.
-    output_mode : typing.Literal["pandas", "spark"], optional
+    output_mode : {"pandas", "spark"}, optional
         The output DataFrame format. Defaults to "pandas".
     approx_distinct : bool, optional
         Whether to return approximate distinct counts of values in the
         data. Used to improve performance of the function. Defaults to
         False.
     rsd : float, optional
-        Maximum relative standard deviation allowed for
-        approxcountdistinct. Note: for rsd < 0.01, it is more efficient
-        to set approx_distinct to False. Defaults to 0.05.
+        Maximum relative standard deviation allowed for approx_distinct.
+        Note: for rsd < 0.01, it is more efficient to set
+        approx_distinct to False. Defaults to 0.05.
 
     Returns
     -------
@@ -133,34 +133,34 @@ def df_describe(
     spark = SparkSession.builder.getOrCreate()
 
     types = df.dtypes
-    types = dict(zip([x[0] for x in types], [x[1] for x in types]))
+    types = dict(zip([x[0] for x in types], [x[1] for x in types], strict=False))
 
     for col in [k for k, v in types.items() if v in ["timestamp", "date", "boolean"]]:
-        df = df.withColumn(col, F.col(col).cast(StringType()))
+        df = df.withColumn(col, sf.col(col).cast(StringType()))
 
     count = df.count()
 
     if approx_distinct:
         distinct_df = df.agg(
-            *(F.approxCountDistinct(F.col(c), rsd).alias(c) for c in df.columns)
-        ).withColumn("summary", F.lit("distinct"))
+            *(sf.approxCountDistinct(sf.col(c), rsd).alias(c) for c in df.columns)
+        ).withColumn("summary", sf.lit("distinct"))
 
     else:
         distinct_df = df.agg(
-            *(F.countDistinct(F.col(c)).alias(c) for c in df.columns)
-        ).withColumn("summary", F.lit("distinct"))
+            *(sf.countDistinct(sf.col(c)).alias(c) for c in df.columns)
+        ).withColumn("summary", sf.lit("distinct"))
 
     empty_df = df.agg(
-        *(F.count(F.when(F.col(c).rlike("^\s*$"), c)).alias(c) for c in df.columns)
-    ).withColumn("summary", F.lit("empty"))
+        *(sf.count(sf.when(sf.col(c).rlike(r"^\s*$"), c)).alias(c) for c in df.columns)
+    ).withColumn("summary", sf.lit("empty"))
 
     max_l_df = df.agg(
-        *(F.max(F.length(F.col(c))).alias(c) for c in df.columns)
-    ).withColumn("summary", F.lit("max_l"))
+        *(sf.max(sf.length(sf.col(c))).alias(c) for c in df.columns)
+    ).withColumn("summary", sf.lit("max_l"))
 
     min_l_df = df.agg(
-        *(F.min(F.length(F.col(c))).alias(c) for c in df.columns)
-    ).withColumn("summary", F.lit("min_l"))
+        *(sf.min(sf.length(sf.col(c))).alias(c) for c in df.columns)
+    ).withColumn("summary", sf.lit("min_l"))
 
     point_variables = [
         x for x in df.columns if types[x] == "double" or types[x].startswith("decimal")
@@ -169,50 +169,50 @@ def df_describe(
     if len(point_variables) != 0:
         max_l_bp_df = df.agg(
             *(
-                F.max(F.length(F.col(c).cast(IntegerType()))).alias(c)
+                sf.max(sf.length(sf.col(c).cast(IntegerType()))).alias(c)
                 for c in point_variables
             )
-        ).withColumn("summary", F.lit("max_l_before_point"))
+        ).withColumn("summary", sf.lit("max_l_before_point"))
 
         min_l_bp_df = df.agg(
             *(
-                F.min(F.length(F.col(c).cast(IntegerType()))).alias(c)
+                sf.min(sf.length(sf.col(c).cast(IntegerType()))).alias(c)
                 for c in point_variables
             )
-        ).withColumn("summary", F.lit("min_l_before_point"))
+        ).withColumn("summary", sf.lit("min_l_before_point"))
 
         max_l_ap_df = df.agg(
             *(
-                F.max(F.length(F.reverse(F.col(c)).cast(IntegerType()))).alias(c)
+                sf.max(sf.length(sf.reverse(sf.col(c)).cast(IntegerType()))).alias(c)
                 for c in point_variables
             )
-        ).withColumn("summary", F.lit("max_l_after_point"))
+        ).withColumn("summary", sf.lit("max_l_after_point"))
 
         min_l_ap_df = df.agg(
             *(
-                F.min(F.length(F.reverse(F.col(c)).cast(IntegerType()))).alias(c)
+                sf.min(sf.length(sf.reverse(sf.col(c)).cast(IntegerType()))).alias(c)
                 for c in point_variables
             )
-        ).withColumn("summary", F.lit("min_l_after_point"))
+        ).withColumn("summary", sf.lit("min_l_after_point"))
 
     else:
         max_l_bp_df = spark.createDataFrame(
-            (pd.DataFrame({"summary": ["max_l_before_point"]}))
+            pd.DataFrame({"summary": ["max_l_before_point"]})
         )
 
         min_l_bp_df = spark.createDataFrame(
-            (pd.DataFrame({"summary": ["min_l_before_point"]}))
+            pd.DataFrame({"summary": ["min_l_before_point"]})
         )
 
         max_l_ap_df = spark.createDataFrame(
-            (pd.DataFrame({"summary": ["max_l_after_point"]}))
+            pd.DataFrame({"summary": ["max_l_after_point"]})
         )
 
         min_l_ap_df = spark.createDataFrame(
-            (pd.DataFrame({"summary": ["min_l_after_point"]}))
+            pd.DataFrame({"summary": ["min_l_after_point"]})
         )
 
-    describe_df = da.union_all(
+    describe_df = dataframes.union_all(
         df.describe(),
         distinct_df,
         # null_df,
@@ -285,14 +285,14 @@ def df_describe(
     ]
 
     if output_mode == "spark":
-        describe_df = ut.pandas_to_spark(describe_df)
+        describe_df = utilities.pandas_to_spark(describe_df)
 
     return describe_df
 
 
 def value_counts(
     df: DataFrame, limit: int = 20, output_mode: Literal["pandas", "spark"] = "pandas"
-) -> tuple[DataFrame, DataFrame]:
+) -> tuple[pd.DataFrame | DataFrame, pd.DataFrame | DataFrame]:
     """Summarise top and bottom distinct value counts per DataFrame.
 
     Produces DataFrames summarising the top and bottom distinct value
@@ -304,7 +304,7 @@ def value_counts(
         Data to be summarised.
     limit : int, optional
         The top n values to be summarised. Defaults to 20.
-    output_mode : typing.Literal["pandas", "spark"], optional
+    output_mode : {"pandas", "spark"}, optional
         The output DataFrame format. Defaults to "pandas".
 
     Returns
@@ -331,14 +331,16 @@ def value_counts(
     2001           1                    353             2
     1986           2                    325             2
     """
-    spark = SparkSession.builder.getOrCreate()
+    SparkSession.builder.getOrCreate()
 
-    def value_count(df, col, limit):
+    def value_count(
+        df: DataFrame, col: str, limit: int
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
         grouped = (
             (
                 df.select(col)
                 .dropna()
-                .withColumn("count", F.count(col).over(Window.partitionBy(col)))
+                .withColumn("count", sf.count(col).over(Window.partitionBy(col)))
             )
             .dropDuplicates()
             .persist()
@@ -366,7 +368,7 @@ def value_counts(
     high = [x[0] for x in dfs]
     low = [x[1] for x in dfs]
 
-    def make_limit(df, limit):
+    def make_limit(df: pd.DataFrame, limit: int) -> pd.DataFrame:
         count = df.shape[0]
 
         if count < limit:
@@ -387,14 +389,14 @@ def value_counts(
     low = pd.concat(low, axis=1)
 
     if output_mode == "spark":
-        high = ut.pandas_to_spark(high)
+        high = utilities.pandas_to_spark(high)
 
-        low = ut.pandas_to_spark(low)
+        low = utilities.pandas_to_spark(low)
 
     return high, low
 
 
-def hive_dtypes(database: str, table: str) -> list:
+def hive_dtypes(database: str, table: str) -> list[Any]:
     """Return list of variables and data types for a Hive table.
 
     Returns a list of variables and their corresponding data types
@@ -435,7 +437,7 @@ def hive_variable_matrix(
         Database to query.
     regex : str, optional
         Regex pattern to match Hive tables against. Defaults to None.
-    output_mode : typing.Literal["pandas", "spark"], optional
+    output_mode : {"pandas", "spark"}, optional
         Type of DataFrame to return the variable matrix in. Defaults to
         "spark".
 
@@ -444,9 +446,9 @@ def hive_variable_matrix(
     pyspark.sql.DataFrame | pandas.DataFrame
         A DataFrame containing the variable matrix.
     """
-    spark = SparkSession.builder.getOrCreate()
+    SparkSession.builder.getOrCreate()
 
-    tables = ut.list_tables(database)
+    tables = utilities.list_tables(database)
 
     if regex is not None:
         tables = list(filter(re.compile(regex).match, tables))
@@ -474,6 +476,6 @@ def hive_variable_matrix(
     out = (out.fillna("").sort_values("variable")).reset_index(drop=True)
 
     if output_mode == "spark":
-        out = ut.pandas_to_spark(out)
+        out = utilities.pandas_to_spark(out)
 
     return out

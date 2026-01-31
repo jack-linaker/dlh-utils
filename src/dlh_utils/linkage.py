@@ -3,17 +3,17 @@
 import os
 import re
 from difflib import SequenceMatcher
+from typing import Any
 
 import jellyfish
 import pandas as pd
-import pyspark.sql.functions as F
+import pyspark.sql.functions as sf
 from graphframes import GraphFrame
 from py4j.protocol import Py4JJavaError
 from pyspark.sql import Column, DataFrame, SparkSession, Window
 from pyspark.sql.types import FloatType, StringType
 
-from dlh_utils import dataframes as da
-from dlh_utils import utilities as ut
+from dlh_utils import dataframes, utilities
 
 
 def alpha_name(df: DataFrame, input_col: str, output_col: str) -> DataFrame:
@@ -66,27 +66,26 @@ def alpha_name(df: DataFrame, input_col: str, output_col: str) -> DataFrame:
     |  6|    null|      null|
     +---+--------+----------+
     """
-    # input validation
+    # Input validation.
     if df.schema[input_col].dataType.typeName() != "string":
-        raise TypeError(f"Column: {input_col} is not of type string")
+        error_message = f"Column: {input_col} is not of type string"
+        raise TypeError(error_message)
 
-    # concat removes any null values. conditional replacement only when not null added
-    # to avoid unwanted removal of null
-    df = df.withColumn(
+    # concat removes any null values. Conditional replacement only when
+    # not null added to avoid unwanted removal of null.
+    return df.withColumn(
         output_col,
-        F.when(F.col(input_col).isNull(), F.col(input_col)).otherwise(
-            F.concat_ws("", F.array_sort(F.split(F.upper(F.col(input_col)), "")))
+        sf.when(sf.col(input_col).isNull(), sf.col(input_col)).otherwise(
+            sf.concat_ws("", sf.array_sort(sf.split(sf.upper(sf.col(input_col)), "")))
         ),
     )
-
-    return df
 
 
 def assert_unique(df: DataFrame, column: str | list[str]) -> None:
     """Assert DataFrame has one row per unique identifier.
 
     Asserts whether a DataFrame contains only one instance of each
-    unique identifier, specified by the ``column`` argument.
+    unique identifier, specified by the `column` argument.
     """
     if not isinstance(column, list):
         column = [column]
@@ -115,7 +114,7 @@ def assert_unique_matches(linked_ids: DataFrame, *identifier_col: str) -> None:
             (
                 linked_ids.groupBy(column)
                 .count()
-                .select(F.max(F.col("count")))
+                .select(sf.max(sf.col("count")))
                 .collect()[0][0]
             )
             == 1
@@ -137,10 +136,10 @@ def blocking(
     df2 : pyspark.sql.DataFrame
         A DataFrame to block.
     blocks : dict
-        Pairs of variables from ``df1`` and ``df2`` to block on, each
+        Pairs of variables from `df1` and `df2` to block on, each
         item is a new blocking pass.
     id_vars : list
-        Unique ID variables from ``df1`` and ``df2``.
+        Unique ID variables from `df1` and `df2`.
 
     Returns
     -------
@@ -243,11 +242,13 @@ def clerical_sample(
         [x[0] for x in linked_ids.select("matchkey").dropDuplicates().collect()]
     )
 
-    linked_ids = linked_ids.withColumn("random", F.rand()).sort("random").drop("random")
+    linked_ids = (
+        linked_ids.withColumn("random", sf.rand()).sort("random").drop("random")
+    )
 
     linked_ids = [
         (
-            linked_ids.where(F.col("matchkey") == mk)
+            linked_ids.where(sf.col("matchkey") == mk)
             .select("matchkey", id_l, id_r)
             .dropDuplicates()
             .limit(n_ids)
@@ -255,7 +256,7 @@ def clerical_sample(
         for mk in mks
     ]
 
-    linked_ids = da.union_all(*linked_ids)
+    linked_ids = dataframes.union_all(*linked_ids)
 
     review_df = (
         linked_ids.join(df_l, id_l, "inner")
@@ -267,13 +268,11 @@ def clerical_sample(
     lead_columns = ["matchkey", id_l, id_r]
     end_columns = ["description"]
 
-    review_df = review_df.select(
+    return review_df.select(
         lead_columns
         + sorted([x for x in review_df.columns if x not in lead_columns + end_columns])
         + end_columns
     )
-
-    return review_df
 
 
 def cluster_number(df: DataFrame, id_1: str, id_2: str) -> DataFrame | None:
@@ -341,55 +340,55 @@ def cluster_number(df: DataFrame, id_1: str, id_2: str) -> DataFrame | None:
     | 3a| 3b|             3|
     +---+---+--------------+
     """
-    # Check variable types
+    # Check variable types.
     if not (
         (isinstance(df.schema[id_1].dataType, StringType))
         and (isinstance(df.schema[id_2].dataType, StringType))
     ):
-        raise TypeError("ID variables must be strings")
+        error_message = "ID variables must be strings"
+        raise TypeError(error_message)
 
-    # Set up spark checkpoint settings
+    # Set up spark checkpoint settings.
     spark = SparkSession.builder.getOrCreate()
     username = os.getenv("HADOOP_USER_NAME")
     checkpoint_path = f"/user/{username}/checkpoints"
     spark.sparkContext.setCheckpointDir(checkpoint_path)
 
-    # Stack all unique IDs datasets into one column called 'id'
+    # Stack all unique IDs datasets into one column called 'id'.
     ids = df.select(id_1).union(df.select(id_2))
     ids = ids.select(id_1).distinct().withColumnRenamed(id_1, "id")
 
-    # Rename matched data columns ready for clustering
+    # Rename matched data columns ready for clustering.
     matches = (
         df.select(id_1, id_2)
         .withColumnRenamed(id_1, "src")
         .withColumnRenamed(id_2, "dst")
     )
 
-    # Create graph & get connected components / clusters
+    # Create graph & get connected components / clusters.
     try:
         graph = GraphFrame(ids, matches)
 
         cluster = graph.connectedComponents()
 
-        # Update cluster numbers to be consecutive (1,2,3,4,... instead of 1,2,3,1000,1001...)
+        # Update cluster numbers to be consecutive (1,2,3,4,... instead
+        # of 1,2,3,1000,1001...).
         lookup = (
             cluster.select("component")
             .dropDuplicates(["component"])
-            .withColumn("Cluster_Number", F.rank().over(Window.orderBy("component")))
+            .withColumn("Cluster_Number", sf.rank().over(Window.orderBy("component")))
             .sort("component")
         )
         cluster = cluster.join(lookup, on="component", how="left").withColumnRenamed(
             "id", id_1
         )
 
-        # Join new cluster number onto matched pairs
-        df = (
+        # Join new cluster number onto matched pairs.
+        return (
             df.join(cluster, on=id_1, how="left")
             .sort("Cluster_Number")
             .drop("component")
         )
-
-        return df
 
     except Py4JJavaError:
         print("""WARNING: A graphframes wrapper package installation has not been found!
@@ -404,7 +403,7 @@ def cluster_number(df: DataFrame, id_1: str, id_2: str) -> DataFrame | None:
 
 
 def deduplicate(
-    df: DataFrame, record_id: str, mks: list, checkpoint: bool = False
+    df: DataFrame, record_id: str, mks: list[Any], *, checkpoint: bool = False
 ) -> tuple[DataFrame, DataFrame]:
     """Self-match a DataFrame to find unique records or duplicates.
 
@@ -445,13 +444,13 @@ def deduplicate(
     >>> CCS.count()
     10487
     """
-    # check to see if matchkeys are passed as a list of lists
+    # Check to see if matchkeys are passed as a list of lists.
     if any(isinstance(matchkey, list) for matchkey in mks) is False:
         mks = [mks]
 
-    df2 = da.suffix_columns(df, suffix="_2")
+    df2 = dataframes.suffix_columns(df, suffix="_2")
 
-    for count, matchkey in enumerate(mks, 1):
+    for count, _matchkey in enumerate(mks, 1):
         print(f"\nLinking on matchkey number {count}")
 
         mk_df2 = [x + "_2" for x in MK]
@@ -460,7 +459,7 @@ def deduplicate(
             df2, on=[df[x] == df2[y] for x, y in zip(MK, mk_df2)], how="inner"
         )
 
-        duplicates = duplicates.withColumn("matchkey", F.lit(count))
+        duplicates = duplicates.withColumn("matchkey", sf.lit(count))
 
         if count == 1:
             matches = duplicates
@@ -475,8 +474,8 @@ def deduplicate(
     duplicates = matches.filter(f"{record_id} != {record_id}_2")
 
     duplicates = duplicates.withColumn(
-        f"{record_id}_min", F.least(*[f"{record_id}", f"{record_id}_2"])
-    ).withColumn(f"{record_id}_max", F.greatest(*[f"{record_id}", f"{record_id}_2"]))
+        f"{record_id}_min", sf.least(*[f"{record_id}", f"{record_id}_2"])
+    ).withColumn(f"{record_id}_max", sf.greatest(*[f"{record_id}", f"{record_id}_2"]))
 
     duplicates = duplicates.selectExpr(
         f"{record_id}_min AS {record_id}",
@@ -501,7 +500,7 @@ def deterministic_linkage(
     df_r: DataFrame,
     id_l: str,
     id_r: str,
-    matchkeys: list,
+    matchkeys: list[Any],
     out_dir: str | None,
 ) -> DataFrame:
     """Deterministically link two DataFrames by matchkeys.
@@ -536,7 +535,7 @@ def deterministic_linkage(
         A DataFrame of the linked identifiers of left and right
         DataFrames, together with the numeric identifier of the
         matchkey/join condition on which the link was achieved. Also
-        saves a parquet of linked identifiers in ``out_dir``.
+        saves a parquet of linked identifiers in `out_dir`.
 
     Examples
     --------
@@ -566,11 +565,8 @@ def deterministic_linkage(
     left residual:  997186
     right residual:  7663
 
-    MATCHKEY 2
-    matches on matchkey:  384
-    total matches:  3199
-    left residual:  996802
-    right residual:  7279
+    MATCHKEY 2 matches on matchkey:  384 total matches:  3199 left
+    residual:  996802 right residual:  7279
 
     >>> links.show()
     +--------------------+--------------------+--------+
@@ -600,7 +596,7 @@ def deterministic_linkage(
             match_data = matchkey_join(df_l, df_r, id_l, id_r, matchkey, index)
             # writes first matchkey to parquet
             if use_parquet:
-                ut.write_format(
+                utilities.write_format(
                     match_data,
                     "parquet",
                     f"{out_dir}/linked_identifiers",
@@ -613,7 +609,9 @@ def deterministic_linkage(
             # reads previous matches
             # used in left anti join to ignore matched records
             if use_parquet:
-                matches = ut.read_format("parquet", f"{out_dir}/linked_identifiers")
+                matches = utilities.read_format(
+                    "parquet", f"{out_dir}/linked_identifiers"
+                )
             else:
                 matches = out_df
 
@@ -636,7 +634,7 @@ def deterministic_linkage(
                 index,
             )
             if use_parquet:
-                ut.write_format(
+                utilities.write_format(
                     match_data,
                     "parquet",
                     f"{out_dir}/linked_identifiers",
@@ -647,7 +645,7 @@ def deterministic_linkage(
 
     # reads and returns final matches
     if use_parquet:
-        matches = ut.read_format("parquet", f"{out_dir}/linked_identifiers")
+        matches = utilities.read_format("parquet", f"{out_dir}/linked_identifiers")
     else:
         matches = out_df
 
@@ -663,7 +661,7 @@ def deterministic_linkage(
     return matches
 
 
-@F.udf(FloatType())
+@sf.udf(FloatType())
 def difflib_sequence_matcher(string1: str | None, string2: str | None) -> float | None:
     """Compute SequenceMatcher similarity score for two strings.
 
@@ -679,9 +677,9 @@ def difflib_sequence_matcher(string1: str | None, string2: str | None) -> float 
     Parameters
     ----------
     string1 : str
-        String to be compared to ``string2``.
+        String to be compared to `string2`.
     string2 : str
-        String to be compared to ``string1``.
+        String to be compared to `string1`.
 
     Returns
     -------
@@ -702,7 +700,7 @@ def difflib_sequence_matcher(string1: str | None, string2: str | None) -> float 
     +---+---------+----------+
     >>> df = df.withColumn(
     ...     "sequence_matcher",
-    ...     difflib_sequence_matcher(F.col("Forename"), F.col("Forename_2")),
+    ...     difflib_sequence_matcher(sf.col("Forename"), sf.col("Forename_2")),
     ... )
     +---+---------+----------+----------------+
     | ID| Forename|Forename_2|sequence_matcher|
@@ -720,7 +718,7 @@ def difflib_sequence_matcher(string1: str | None, string2: str | None) -> float 
     return SequenceMatcher(a=string1, b=string2).ratio()
 
 
-def extract_mk_variables(df: DataFrame, match_key: list) -> list:
+def extract_mk_variables(df: DataFrame, match_key: list[Any]) -> list[Any]:
     """Extract variables from matchkey join condition.
 
     For example, would return ["first_name", "last_name",
@@ -742,12 +740,10 @@ def extract_mk_variables(df: DataFrame, match_key: list) -> list:
     """
     mk_variables = re.split("[^a-zA-Z0-9_]", str(match_key))
     mk_variables = [x for x in mk_variables if x in df.columns]
-    mk_variables = list(set(mk_variables))
-
-    return mk_variables
+    return list(set(mk_variables))
 
 
-@F.udf(FloatType())
+@sf.udf(FloatType())
 def jaro(string1: str | None, string2: str | None) -> float | None:
     """Compute Jaro similarity score between two strings.
 
@@ -762,9 +758,9 @@ def jaro(string1: str | None, string2: str | None) -> float | None:
     Parameters
     ----------
     string1 : str, optional
-        String to be compared to ``string2``.
+        String to be compared to `string2`.
     string2 : str, optional
-        String to be compared to ``string1``.
+        String to be compared to `string1`.
 
     Returns
     -------
@@ -786,7 +782,7 @@ def jaro(string1: str | None, string2: str | None) -> float | None:
     |  5|  Maggie|      John|
     +---+--------+----------+
     >>> df = df.withColumn(
-    ...     "Forename_jaro", jaro(F.col("Forename"), F.col("Forename_2"))
+    ...     "Forename_jaro", jaro(sf.col("Forename"), sf.col("Forename_2"))
     ... )
     >>> df.show()
     +---+--------+----------+-------------+
@@ -802,7 +798,7 @@ def jaro(string1: str | None, string2: str | None) -> float | None:
     Used in a matchkey:
 
     >>> mk = [
-    ...     jaro(F.col("First_Name_cen"), F.col("First_Name_ccs")) > 0.7,
+    ...     jaro(sf.col("First_Name_cen"), sf.col("First_Name_ccs")) > 0.7,
     ...     CEN.Last_Name_cen == CCS.Last_Name_ccs,
     ...     CEN.Sex_cen == CCS.Sex_ccs,
     ...     CEN.Resident_Age_cen == CCS.Resident_Age_ccs,
@@ -824,7 +820,7 @@ def jaro(string1: str | None, string2: str | None) -> float | None:
     )
 
 
-@F.udf(FloatType())
+@sf.udf(FloatType())
 def jaro_winkler(string1: str | None, string2: str | None) -> float | None:
     """Compute Jaro-Winkler similarity score between two strings.
 
@@ -839,9 +835,9 @@ def jaro_winkler(string1: str | None, string2: str | None) -> float | None:
     Parameters
     ----------
     string1 : str
-        String to be compared to ``string2``.
+        String to be compared to `string2`.
     string2 : str
-        String to be compared to ``string1``.
+        String to be compared to `string1`.
 
     Returns
     -------
@@ -861,7 +857,7 @@ def jaro_winkler(string1: str | None, string2: str | None) -> float | None:
     |  5|     Emma|     Emily|
     +---+---------+----------+
     >>> df = df.withColumn(
-    ...     "fnjaro_winkler", jaro_winkler(F.col("Forename"), F.col("Forename_2"))
+    ...     "fnjaro_winkler", jaro_winkler(sf.col("Forename"), sf.col("Forename_2"))
     ... )
     +---+---------+----------+--------------+
     | ID| Forename|Forename_2|fnjaro_winkler|
@@ -874,7 +870,7 @@ def jaro_winkler(string1: str | None, string2: str | None) -> float | None:
     +---+---------+----------+--------------+
 
     >>> mk = [
-    ...     jaro_winkler(F.col("First_Name_cen"), F.col("First_Name_ccs")) > 0.7,
+    ...     jaro_winkler(sf.col("First_Name_cen"), sf.col("First_Name_ccs")) > 0.7,
     ...     CEN.Last_Name_cen == CCS.Last_Name_ccs,
     ...     CEN.Sex_cen == CCS.Sex_ccs,
     ...     CEN.Resident_Age_cen == CCS.Resident_Age_ccs,
@@ -916,7 +912,7 @@ def matchkey_counts(linked_df: DataFrame) -> DataFrame:
     return linked_df.groupBy("matchkey").count().sort("count", ascending=False)
 
 
-def matchkey_dataframe(mks: list) -> DataFrame:
+def matchkey_dataframe(mks: list[Any]) -> DataFrame:
     """Create DataFrame of matchkeys and descriptions.
 
     Takes a list of matchkeys. Assigns numbers to matchkeys based on
@@ -935,24 +931,22 @@ def matchkey_dataframe(mks: list) -> DataFrame:
     """
     spark = SparkSession.builder.getOrCreate()
 
-    mk_df = spark.createDataFrame(
+    return spark.createDataFrame(
         pd.DataFrame(
             {
-                "matchkey": [x for x, y in enumerate(mks, 1)],
+                "matchkey": [x for x, _y in enumerate(mks, 1)],
                 "description": [str(x) for x in mks],
             }
         )[["matchkey", "description"]]
     ).withColumn(
         "description",
-        F.regexp_replace(
-            F.col("description"),
+        sf.regexp_replace(
+            sf.col("description"),
             "(?:Column[<]b['])|(?:['][>][,] \
                  Column[<]b['])|(?:['][>])| ",
             "",
         ),
     )
-
-    return mk_df
 
 
 def matchkey_join(
@@ -960,7 +954,7 @@ def matchkey_join(
     df_r: DataFrame,
     id_l: str,
     id_r: str,
-    match_key: list,
+    match_key: list[Any],
     mk_n: int = 0,
 ) -> DataFrame:
     """Join DataFrames on matchkey retaining only 1:1 matches.
@@ -1003,13 +997,11 @@ def matchkey_join(
         df_l.join(df_r, match_key, "inner")
         .select(id_l, id_r)
         .dropDuplicates()
-        .withColumn("matchkey", F.lit(mk_n))
+        .withColumn("matchkey", sf.lit(mk_n))
     )
 
-    df = da.filter_window(df, id_r, id_l, "count", 1)
-    df = da.filter_window(df, id_l, id_r, "count", 1)
-
-    return df
+    df = dataframes.filter_window(df, id_r, id_l, "count", 1)
+    return dataframes.filter_window(df, id_l, id_r, "count", 1)
 
 
 def metaphone(df: DataFrame, input_col: str, output_col: str) -> DataFrame:
@@ -1043,16 +1035,14 @@ def metaphone(df: DataFrame, input_col: str, output_col: str) -> DataFrame:
     +---+---------+------------------+
     """
 
-    @F.udf(returnType=StringType())
-    def meta(_string):
+    @sf.udf(returnType=StringType())
+    def meta(_string: str | None) -> str | None:
         return None if _string is None else jellyfish.metaphone(_string)
 
-    df = df.withColumn(output_col, meta(F.col(input_col)))
-
-    return df
+    return df.withColumn(output_col, meta(sf.col(input_col)))
 
 
-def mk_dropna(df: DataFrame, match_key: list) -> DataFrame:
+def mk_dropna(df: DataFrame, match_key: list[Any]) -> DataFrame:
     """Drop rows with nulls in matchkey join columns.
 
     Drops null values in variables included in matchkeys join
@@ -1081,14 +1071,11 @@ def mk_dropna(df: DataFrame, match_key: list) -> DataFrame:
     extract_mk_variables()
     """
     variables = extract_mk_variables(df, match_key)
-
-    df = df.dropna(subset=variables)
-
-    return df
+    return df.dropna(subset=variables)
 
 
 def order_matchkeys(
-    df_l: DataFrame, df_r: DataFrame, mks: list, chunk: int = 10
+    df_l: DataFrame, df_r: DataFrame, mks: list[Any], chunk: int = 10
 ) -> DataFrame:
     """Order matchkeys by ascending number of matches.
 
@@ -1113,10 +1100,10 @@ def order_matchkeys(
         variables.
     """
     mk_order = pd.DataFrame(
-        {"mks": mks, "supplied_order": [mk_n for mk_n, mk in enumerate(mks)]}
+        {"mks": mks, "supplied_order": [mk_n for mk_n, _mk in enumerate(mks)]}
     )
 
-    mks = ut.chunk_list(mks, chunk)
+    mks = utilities.chunk_list(mks, chunk)
 
     mk_counts = pd.DataFrame(columns=["supplied_order", "count"])
 
@@ -1125,12 +1112,12 @@ def order_matchkeys(
     for mk_chunk in mks:
         chunk_n += chunk
 
-        df = da.union_all(
+        df = dataframes.union_all(
             *[
                 (
                     mk_dropna(df_l, mk)
                     .join(mk_dropna(df_r, mk), on=mk, how="inner")
-                    .withColumn("supplied_order", F.lit(mk_n + chunk_n))
+                    .withColumn("supplied_order", sf.lit(mk_n + chunk_n))
                     .select("supplied_order")
                 )
                 for mk_n, mk in enumerate(mk_chunk)
@@ -1143,9 +1130,7 @@ def order_matchkeys(
 
     mk_order = mk_order.merge(mk_counts, on="supplied_order").sort_values("count")
 
-    mk_order = list(mk_order["mks"])
-
-    return mk_order
+    return list(mk_order["mks"])
 
 
 def soundex(df: DataFrame, input_col: str, output_col: str) -> DataFrame:
@@ -1188,11 +1173,10 @@ def soundex(df: DataFrame, input_col: str, output_col: str) -> DataFrame:
     |  5|  Maggie|            M200|
     +---+--------+----------------+
     """
-    df = df.withColumn(output_col, F.soundex(input_col))
-    return df
+    return df.withColumn(output_col, sf.soundex(input_col))
 
 
-def std_lev_score(string1: str, string2: str) -> Column:
+def std_lev_score(string1: str | Column, string2: str | Column) -> Column:
     """Compute Levenshtein similarity score between two strings.
 
     Applies the standardised levenshtein string similarity function to
@@ -1206,9 +1190,9 @@ def std_lev_score(string1: str, string2: str) -> Column:
     Parameters
     ----------
     string1 : str
-        String to be compared to ``string2``.
+        String to be compared to `string2`.
     string2 : str
-        String to be compared to ``string1``.
+        String to be compared to `string1`.
 
     Returns
     -------
@@ -1230,7 +1214,7 @@ def std_lev_score(string1: str, string2: str) -> Column:
     |  5|  Maggie|  Milhouse|
     +---+--------+----------+
     >>> df = df.withColumn(
-    ...     "forename_lev", std_lev_score(F.col("Forename"), F.col("Forename_2"))
+    ...     "forename_lev", std_lev_score(sf.col("Forename"), sf.col("Forename_2"))
     ... )
     +---+--------+----------+------------+
     | ID|Forename|Forename_2|forename_lev|
@@ -1245,7 +1229,7 @@ def std_lev_score(string1: str, string2: str) -> Column:
     Used in a matchkey:
 
     >>> mk = [
-    ...     std_lev_score(F.col("First_Name_cen"), F.col("First_Name_ccs")) > 0.7,
+    ...     std_lev_score(sf.col("First_Name_cen"), sf.col("First_Name_ccs")) > 0.7,
     ...     CEN.Last_Name_cen == CCS.Last_Name_ccs,
     ...     CEN.Sex_cen == CCS.Sex_ccs,
     ...     CEN.Resident_Age_cen == CCS.Resident_Age_ccs,
@@ -1261,6 +1245,6 @@ def std_lev_score(string1: str, string2: str) -> Column:
     ... )
     """
     return 1 - (
-        (F.levenshtein(string1, string2))
-        / F.greatest(F.length(string1), F.length(string2))
+        (sf.levenshtein(string1, string2))
+        / sf.greatest(sf.length(string1), sf.length(string2))
     )

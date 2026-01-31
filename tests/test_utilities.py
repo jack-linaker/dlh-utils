@@ -3,8 +3,6 @@ import os
 
 import numpy as np
 import pandas as pd
-import pyspark.sql.functions as F
-from chispa import assert_df_equality
 from pandas.testing import assert_frame_equal
 from pyspark.sql import SparkSession
 from pyspark.sql.types import (
@@ -17,6 +15,7 @@ from pyspark.sql.types import (
     StructType,
     TimestampType,
 )
+from pyspark.testing import assertDataFrameEqual
 
 from dlh_utils.utilities import (
     chunk_list,
@@ -91,11 +90,11 @@ class TestPandasToSpark:
             ]
         )
         date_val = dt.datetime(1900, 1, 1, 0, 0)
-        intended_data = [
+        intended_data: list[list[dt.datetime | float | str]] = [
             [date_val, 1, 1, 1.0, 1.0, "hello"],
         ]
         intended_df = spark.createDataFrame(intended_data, intended_schema)
-        assert_df_equality(result_df, intended_df, ignore_row_order=True)
+        assertDataFrameEqual(result_df, intended_df)
 
 
 class TestRegexMatch:
@@ -124,7 +123,7 @@ class TestSearchFiles:
     def test_expected(self) -> None:
         path = os.path.dirname(os.path.realpath(__file__))
         result = search_files(path, "import")
-        assert sorted(list(result.keys())) == sorted(
+        assert sorted(result.keys()) == sorted(
             [
                 "test_formatting.py",
                 "test_linkage.py",

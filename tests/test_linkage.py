@@ -1,6 +1,5 @@
 import pandas as pd
-import pyspark.sql.functions as F
-from chispa import assert_df_equality
+import pyspark.sql.functions as sf
 from pyspark.sql import SparkSession
 from pyspark.sql.types import (
     DoubleType,
@@ -11,6 +10,7 @@ from pyspark.sql.types import (
     StructField,
     StructType,
 )
+from pyspark.testing import assertDataFrameEqual
 
 from dlh_utils.linkage import (
     alpha_name,
@@ -40,7 +40,7 @@ class TestAlphaName:
         test_schema = StructType(
             [StructField("ID", IntegerType()), StructField("Forename", StringType())]
         )
-        test_data = [
+        test_data: list[list[int | str]] = [
             [1, "Homer"],
             [2, "Marge"],
             [3, "Bart"],
@@ -55,7 +55,7 @@ class TestAlphaName:
                 StructField("alpha_name", StringType()),
             ]
         )
-        intended_data = [
+        intended_data: list[list[int | str]] = [
             [1, "Homer", "EHMOR"],
             [2, "Marge", "AEGMR"],
             [3, "Bart", "ABRT"],
@@ -64,13 +64,13 @@ class TestAlphaName:
         ]
         intended_df = spark.createDataFrame(intended_data, intended_schema)
         result_df = alpha_name(test_df, "Forename", "alpha_name")
-        assert_df_equality(intended_df, result_df, ignore_row_order=True)
+        assertDataFrameEqual(intended_df, result_df)
 
     def test_expected_2(self, spark: SparkSession) -> None:
         test_schema2 = StructType(
             [StructField("ID", IntegerType()), StructField("Name", StringType())]
         )
-        test_data2 = [
+        test_data2: list[list[int | str | None]] = [
             [1, "Romer, Bogdan"],
             [2, "Margarine"],
             [3, None],
@@ -85,7 +85,7 @@ class TestAlphaName:
                 StructField("alpha_name", StringType()),
             ]
         )  # Note alpha_name is always returned as nullable=false
-        intended_data2 = [
+        intended_data2: list[list[int | str | None]] = [
             [1, "Romer, Bogdan", " ,ABDEGMNOORR"],
             [2, "Margarine", "AAEGIMNRR"],
             [3, None, None],
@@ -94,8 +94,7 @@ class TestAlphaName:
         ]
         intended_df2 = spark.createDataFrame(intended_data2, intended_schema2)
         result_df2 = alpha_name(test_df2, "Name", "alpha_name")
-
-        assert_df_equality(intended_df2, result_df2, ignore_row_order=True)
+        assertDataFrameEqual(intended_df2, result_df2)
 
 
 class TestAssertUnique:
@@ -151,7 +150,7 @@ class TestBlocking:
                 StructField("pc_df1", StringType()),
             ]
         )
-        test_data = [
+        test_data: list[list[int | str]] = [
             [1, 1, "Male", "gu1111"],
             [2, 1, "Female", "gu1211"],
             [3, 56, "Male", "gu2111"],
@@ -186,12 +185,12 @@ class TestBlocking:
                 StructField("pc_df2", StringType()),
             ]
         )
-        expected_data = [
+        expected_data: list[list[int | str]] = [
             [1, 1, "Male", "gu1111", 4, 7, "Female", "gu1111"],
             [2, 1, "Female", "gu1211", 6, 2, "Female", "gu1211"],
         ]
         expected_df = spark.createDataFrame(expected_data, expected_schema)
-        assert_df_equality(expected_df, result_df, ignore_row_order=True)
+        assertDataFrameEqual(expected_df, result_df)
 
 
 class TestClericalSample:
@@ -238,15 +237,15 @@ class TestClericalSample:
                 df_l["l_last_name"] == df_r["r_last_name"],
             ],
             [
-                F.substring(df_l["l_first_name"], 1, 1)
-                == F.substring(df_r["r_first_name"], 1, 1),
+                sf.substring(df_l["l_first_name"], 1, 1)
+                == sf.substring(df_r["r_first_name"], 1, 1),
                 df_l["l_last_name"] == df_r["r_last_name"],
             ],
             [
-                F.substring(df_l["l_first_name"], 1, 1)
-                == F.substring(df_r["r_first_name"], 1, 1),
-                F.substring(df_l["l_last_name"], 1, 1)
-                == F.substring(df_r["r_last_name"], 1, 1),
+                sf.substring(df_l["l_first_name"], 1, 1)
+                == sf.substring(df_r["r_first_name"], 1, 1),
+                sf.substring(df_l["l_last_name"], 1, 1)
+                == sf.substring(df_r["r_last_name"], 1, 1),
             ],
         ]
         linked_ids = deterministic_linkage(df_l, df_r, "l_id", "r_id", mks, None)
@@ -261,7 +260,7 @@ class TestClericalSample:
         )
         intended_data = [[1, 2], [2, 3]]
         intended_df = spark.createDataFrame(intended_data, intended_schema)
-        assert_df_equality(result_agg, intended_df, ignore_row_order=True)
+        assertDataFrameEqual(result_agg, intended_df)
 
 
 class TestClusterNumber:
@@ -293,7 +292,7 @@ class TestClusterNumber:
                 StructField("Cluster_Number", IntegerType()),
             ]
         )
-        intended_data = [
+        intended_data: list[list[str | int]] = [
             ["2a", "1b", 1],
             ["2a", "9b", 1],
             ["3a", "3b", 2],
@@ -302,7 +301,7 @@ class TestClusterNumber:
             ["1a", "2b", 3],
         ]
         intended_df = spark.createDataFrame(intended_data, intended_schema)
-        assert_df_equality(intended_df, result_df, ignore_row_order=True)
+        assertDataFrameEqual(intended_df, result_df)
 
 
 class TestDeterministicLinkage:
@@ -457,15 +456,15 @@ class TestDeterministicLinkage:
                 df_l["last_name"] == df_r["last_name"],
             ],
             [
-                F.substring(df_l["first_name"], 1, 1)
-                == F.substring(df_r["first_name"], 1, 1),
+                sf.substring(df_l["first_name"], 1, 1)
+                == sf.substring(df_r["first_name"], 1, 1),
                 df_l["last_name"] == df_r["last_name"],
             ],
             [
-                F.substring(df_l["first_name"], 1, 1)
-                == F.substring(df_r["first_name"], 1, 1),
-                F.substring(df_l["last_name"], 1, 1)
-                == F.substring(df_r["last_name"], 1, 1),
+                sf.substring(df_l["first_name"], 1, 1)
+                == sf.substring(df_r["first_name"], 1, 1),
+                sf.substring(df_l["last_name"], 1, 1)
+                == sf.substring(df_r["last_name"], 1, 1),
             ],
         ]
         result_df = deterministic_linkage(df_l, df_r, "l_id", "r_id", mks, out_dir=None)
@@ -476,7 +475,7 @@ class TestDeterministicLinkage:
                 StructField("matchkey", IntegerType(), nullable=False),
             ]
         )
-        intended_data = [
+        intended_data: list[list[str | int]] = [
             ["10", "10", 1],
             ["11", "11", 1],
             ["12", "12", 1],
@@ -499,9 +498,7 @@ class TestDeterministicLinkage:
             ["5", "5", 2],
         ]
         intended_df = spark.createDataFrame(intended_data, intended_schema)
-        assert_df_equality(
-            result_df, intended_df, ignore_row_order=True, ignore_column_order=True
-        )
+        assertDataFrameEqual(result_df, intended_df, ignoreColumnOrder=True)
 
 
 class TestDifflibSequenceMatcher:
@@ -518,7 +515,7 @@ class TestDifflibSequenceMatcher:
         ]
         test_df = spark.createDataFrame(test_data, test_schema)
         result_df = test_df.withColumn(
-            "difflib", difflib_sequence_matcher(F.col("string1"), F.col("string2"))
+            "difflib", difflib_sequence_matcher(sf.col("string1"), sf.col("string2"))
         )
         intended_schema = StructType(
             [
@@ -527,7 +524,7 @@ class TestDifflibSequenceMatcher:
                 StructField("difflib", FloatType()),
             ]
         )
-        intended_data = [
+        intended_data: list[list[str | float]] = [
             ["David", "Emily", 0.2],
             ["Idrissa", "Emily", 0.16666667],
             ["Edward", "Emily", 0.18181819],
@@ -535,7 +532,7 @@ class TestDifflibSequenceMatcher:
             ["Emma", "Emily", 0.44444445],
         ]
         intended_df = spark.createDataFrame(intended_data, intended_schema)
-        assert_df_equality(intended_df, result_df, ignore_row_order=True)
+        assertDataFrameEqual(intended_df, result_df)
 
 
 class TestExtractMkVariables:
@@ -690,15 +687,15 @@ class TestExtractMkVariables:
                 test_df_l["last_name"] == test_df_r["last_name"],
             ],
             [
-                F.substring(test_df_l["first_name"], 1, 1)
-                == F.substring(test_df_r["first_name"], 1, 1),
+                sf.substring(test_df_l["first_name"], 1, 1)
+                == sf.substring(test_df_r["first_name"], 1, 1),
                 test_df_l["last_name"] == test_df_r["last_name"],
             ],
             [
-                F.substring(test_df_l["first_name"], 1, 1)
-                == F.substring(test_df_r["first_name"], 1, 1),
-                F.substring(test_df_l["last_name"], 1, 1)
-                == F.substring(test_df_r["last_name"], 1, 1),
+                sf.substring(test_df_l["first_name"], 1, 1)
+                == sf.substring(test_df_r["first_name"], 1, 1),
+                sf.substring(test_df_l["last_name"], 1, 1)
+                == sf.substring(test_df_r["last_name"], 1, 1),
             ],
         ]
         intended_list = sorted(["first_name", "last_name"])
@@ -768,9 +765,7 @@ class TestMatchkeyCounts:
             pd.DataFrame({"matchkey": ["1", "4", "3"], "count": [2, 2, 1]})
         ).select("matchkey", "count")
         result_df = matchkey_counts(test_df)
-        assert_df_equality(
-            intended_df, result_df, ignore_nullable=True, ignore_row_order=True
-        )
+        assertDataFrameEqual(intended_df, result_df)
 
 
 class TestMatchkeyDataframe:
@@ -803,10 +798,10 @@ class TestMatchkeyDataframe:
                 df_l["date_of_birth"] == df_r["date_of_birth"],
             ],
             [
-                F.substring(df_l["first_name"], 0, 2)
-                == F.substring(df_r["first_name"], 0, 2),
-                F.substring(df_l["last_name"], 0, 2)
-                == F.substring(df_r["last_name"], 0, 2),
+                sf.substring(df_l["first_name"], 0, 2)
+                == sf.substring(df_r["first_name"], 0, 2),
+                sf.substring(df_l["last_name"], 0, 2)
+                == sf.substring(df_r["last_name"], 0, 2),
                 df_l["uprn"] == df_r["uprn"],
                 df_l["date_of_birth"] == df_r["date_of_birth"],
             ],
@@ -817,7 +812,7 @@ class TestMatchkeyDataframe:
                 StructField("description", StringType()),
             ]
         )
-        intended_data = [
+        intended_data: list[list[int | str]] = [
             [
                 1,
                 "[(first_name=first_name),(last_name=last_name),(uprn=uprn),"
@@ -832,7 +827,7 @@ class TestMatchkeyDataframe:
         ]
         intended_df = spark.createDataFrame(intended_data, intended_schema)
         result_df = matchkey_dataframe(mks)
-        assert_df_equality(intended_df, result_df, ignore_row_order=True)
+        assertDataFrameEqual(intended_df, result_df)
 
 
 class TestMatchkeyJoin:
@@ -987,15 +982,15 @@ class TestMatchkeyJoin:
                 test_df_1["last_name"] == test_df_2["last_name"],
             ],
             [
-                F.substring(test_df_1["first_name"], 1, 1)
-                == F.substring(test_df_2["first_name"], 1, 1),
+                sf.substring(test_df_1["first_name"], 1, 1)
+                == sf.substring(test_df_2["first_name"], 1, 1),
                 test_df_1["last_name"] == test_df_2["last_name"],
             ],
             [
-                F.substring(test_df_1["first_name"], 1, 1)
-                == F.substring(test_df_2["first_name"], 1, 1),
-                F.substring(test_df_1["last_name"], 1, 1)
-                == F.substring(test_df_2["last_name"], 1, 1),
+                sf.substring(test_df_1["first_name"], 1, 1)
+                == sf.substring(test_df_2["first_name"], 1, 1),
+                sf.substring(test_df_1["last_name"], 1, 1)
+                == sf.substring(test_df_2["last_name"], 1, 1),
             ],
         ]
         intended_schema = StructType(
@@ -1005,7 +1000,7 @@ class TestMatchkeyJoin:
                 StructField("matchkey", IntegerType(), nullable=False),
             ]
         )
-        intended_data = [
+        intended_data: list[list[str | int]] = [
             ["7", "7", 1],
             ["15", "15", 1],
             ["8", "8", 1],
@@ -1019,7 +1014,7 @@ class TestMatchkeyJoin:
         ]
         intended_df = spark.createDataFrame(intended_data, intended_schema)
         result_df = matchkey_join(test_df_1, test_df_2, "l_id", "r_id", mks[2], 1)
-        assert_df_equality(intended_df, result_df, ignore_row_order=True)
+        assertDataFrameEqual(intended_df, result_df)
 
 
 class TestMetaphone:
@@ -1027,7 +1022,7 @@ class TestMetaphone:
         test_schema = StructType(
             [StructField("ID", IntegerType()), StructField("Forename", StringType())]
         )
-        test_data = [
+        test_data: list[list[int | str]] = [
             [1, "David"],
             [2, "Idrissa"],
             [3, "Edward"],
@@ -1051,7 +1046,7 @@ class TestMetaphone:
             [5, "Emma", "EM"],
         ]
         intended_df = spark.createDataFrame(intended_data, intended_schema)
-        assert_df_equality(intended_df, result_df, ignore_row_order=True)
+        assertDataFrameEqual(intended_df, result_df)
 
 
 class TestMkDropna:
@@ -1080,15 +1075,15 @@ class TestMkDropna:
                 test_df_l["last_name"] == test_df_r["last_name"],
             ],
             [
-                F.substring(test_df_l["first_name"], 1, 1)
-                == F.substring(test_df_r["first_name"], 1, 1),
+                sf.substring(test_df_l["first_name"], 1, 1)
+                == sf.substring(test_df_r["first_name"], 1, 1),
                 test_df_l["last_name"] == test_df_r["last_name"],
             ],
             [
-                F.substring(test_df_l["first_name"], 1, 1)
-                == F.substring(test_df_r["first_name"], 1, 1),
-                F.substring(test_df_l["last_name"], 1, 1)
-                == F.substring(test_df_r["last_name"], 1, 1),
+                sf.substring(test_df_l["first_name"], 1, 1)
+                == sf.substring(test_df_r["first_name"], 1, 1),
+                sf.substring(test_df_l["last_name"], 1, 1)
+                == sf.substring(test_df_r["last_name"], 1, 1),
             ],
         ]
         result_df = mk_dropna(df=test_df_l, match_key=mks)
@@ -1101,7 +1096,7 @@ class TestMkDropna:
                 }
             )
         )
-        assert_df_equality(intended_df, result_df, ignore_row_order=True)
+        assertDataFrameEqual(intended_df, result_df)
 
 
 class TestOrderMatchkeys:
@@ -1252,14 +1247,14 @@ class TestOrderMatchkeys:
         )
         mks = [
             [
-                F.substring(dfo["first_name"], 1, 1)
-                == F.substring(dffn["first_name"], 1, 1),
-                F.substring(dfo["last_name"], 1, 1)
-                == F.substring(dffn["last_name"], 1, 1),
+                sf.substring(dfo["first_name"], 1, 1)
+                == sf.substring(dffn["first_name"], 1, 1),
+                sf.substring(dfo["last_name"], 1, 1)
+                == sf.substring(dffn["last_name"], 1, 1),
             ],
             [
-                F.substring(dfo["first_name"], 1, 1)
-                == F.substring(dffn["first_name"], 1, 1),
+                sf.substring(dfo["first_name"], 1, 1)
+                == sf.substring(dffn["first_name"], 1, 1),
                 dfo["last_name"] == dffn["last_name"],
             ],
             [
@@ -1273,15 +1268,15 @@ class TestOrderMatchkeys:
                 dfo["last_name"] == dffn["last_name"],
             ],
             [
-                F.substring(dfo["first_name"], 1, 1)
-                == F.substring(dffn["first_name"], 1, 1),
+                sf.substring(dfo["first_name"], 1, 1)
+                == sf.substring(dffn["first_name"], 1, 1),
                 dfo["last_name"] == dffn["last_name"],
             ],
             [
-                F.substring(dfo["first_name"], 1, 1)
-                == F.substring(dffn["first_name"], 1, 1),
-                F.substring(dfo["last_name"], 1, 1)
-                == F.substring(dffn["last_name"], 1, 1),
+                sf.substring(dfo["first_name"], 1, 1)
+                == sf.substring(dffn["first_name"], 1, 1),
+                sf.substring(dfo["last_name"], 1, 1)
+                == sf.substring(dffn["last_name"], 1, 1),
             ],
         ]
         result_list = order_matchkeys(dfo, dffn, mks)
@@ -1295,7 +1290,7 @@ class TestSoundex:
         test_schema = StructType(
             [StructField("ID", IntegerType()), StructField("Forename", StringType())]
         )
-        test_data = [
+        test_data: list[list[int | str]] = [
             [1, "Homer"],
             [2, "Marge"],
             [3, "Bart"],
@@ -1311,7 +1306,7 @@ class TestSoundex:
                 StructField("forename_soundex", StringType()),
             ]
         )
-        intended_data = [
+        intended_data: list[list[int | str]] = [
             [1, "Homer", "H560"],
             [2, "Marge", "M620"],
             [3, "Bart", "B630"],
@@ -1319,24 +1314,29 @@ class TestSoundex:
             [5, "Maggie", "M200"],
         ]
         intended_df = spark.createDataFrame(intended_data, intended_schema)
-        assert_df_equality(intended_df, result_df, ignore_row_order=True)
+        assertDataFrameEqual(intended_df, result_df)
 
     def test_expected_2(self, spark: SparkSession) -> None:
         test_schema2 = StructType([StructField("Surname", StringType())])
-        test_data2 = [["McDonald"], [None], ["MacDonald"], ["MacDougall"]]
+        test_data2: list[list[str | None]] = [
+            ["McDonald"],
+            [None],
+            ["MacDonald"],
+            ["MacDougall"],
+        ]
         test_df2 = spark.createDataFrame(test_data2, test_schema2)
         result_df2 = soundex(test_df2, "Surname", "soundex")
         intended_schema2 = StructType(
             [StructField("Surname", StringType()), StructField("soundex", StringType())]
         )
-        intended_data2 = [
+        intended_data2: list[list[str | None]] = [
             ["McDonald", "M235"],
             [None, None],
             ["MacDonald", "M235"],
             ["MacDougall", "M232"],
         ]
         intended_df2 = spark.createDataFrame(intended_data2, intended_schema2)
-        assert_df_equality(intended_df2, result_df2, ignore_row_order=True)
+        assertDataFrameEqual(intended_df2, result_df2)
 
 
 class TestStdLevScore:
@@ -1348,7 +1348,7 @@ class TestStdLevScore:
                 StructField("Forename_2", StringType()),
             ]
         )
-        test_data = [
+        test_data: list[list[int | str]] = [
             [1, "Homer", "Milhouse"],
             [2, "Marge", "Milhouse"],
             [3, "Bart", "Milhouse"],
@@ -1357,7 +1357,7 @@ class TestStdLevScore:
         ]
         test_df = spark.createDataFrame(test_data, test_schema)
         result_df = test_df.withColumn(
-            "forename_lev", std_lev_score(F.col("Forename"), F.col("Forename_2"))
+            "forename_lev", std_lev_score(sf.col("Forename"), sf.col("Forename_2"))
         )
         intended_schema = StructType(
             [
@@ -1367,7 +1367,7 @@ class TestStdLevScore:
                 StructField("forename_lev", DoubleType()),
             ]
         )
-        intended_data = [
+        intended_data: list[list[int | str | float]] = [
             [1, "Homer", "Milhouse", 1 / 8],
             [2, "Marge", "Milhouse", 2 / 8],
             [3, "Bart", "Milhouse", 0 / 8],
@@ -1375,7 +1375,7 @@ class TestStdLevScore:
             [5, "Maggie", "Milhouse", 2 / 8],
         ]
         intended_df = spark.createDataFrame(intended_data, intended_schema)
-        assert_df_equality(intended_df, result_df, ignore_row_order=True)
+        assertDataFrameEqual(intended_df, result_df)
 
     def test_expected_2(self, spark: SparkSession) -> None:
         test_schema = StructType(
@@ -1385,7 +1385,7 @@ class TestStdLevScore:
                 StructField("Forename_2", StringType()),
             ]
         )
-        test_data2 = [
+        test_data2: list[list[int | str | None]] = [
             [1, "Homer", "Milhouse"],
             [2, "Marge", "Milhouse"],
             [3, "Bart", "Milhouse"],
@@ -1397,7 +1397,7 @@ class TestStdLevScore:
         ]
         test_df2 = spark.createDataFrame(test_data2, test_schema)
         result_df2 = test_df2.withColumn(
-            "forename_lev", std_lev_score(F.col("Forename"), F.col("Forename_2"))
+            "forename_lev", std_lev_score(sf.col("Forename"), sf.col("Forename_2"))
         )
         intended_schema = StructType(
             [
@@ -1407,7 +1407,7 @@ class TestStdLevScore:
                 StructField("forename_lev", DoubleType()),
             ]
         )
-        intended_data2 = [
+        intended_data2: list[list[int | str | None | float]] = [
             [1, "Homer", "Milhouse", 1 / 8],
             [2, "Marge", "Milhouse", 2 / 8],
             [3, "Bart", "Milhouse", 0 / 8],
@@ -1418,4 +1418,4 @@ class TestStdLevScore:
             [8, "Milhouse", "Milhouse", 1 / 1],
         ]
         intended_df2 = spark.createDataFrame(intended_data2, intended_schema)
-        assert_df_equality(intended_df2, result_df2, ignore_row_order=True)
+        assertDataFrameEqual(intended_df2, result_df2)

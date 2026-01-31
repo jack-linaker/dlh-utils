@@ -5,7 +5,7 @@ from operator import add
 from typing import Any, Literal
 
 import pandas as pd
-import pyspark.sql.functions as F
+import pyspark.sql.functions as sf
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.types import IntegerType
 
@@ -16,7 +16,7 @@ def flag(
     condition: Literal["==", "!=", ">", ">=", "<", "<=", "isNull", "isNotNull", "regex"]
     | None = None,
     condition_value: Any = None,
-    condition_col: Any = None,
+    condition_col: str | None = None,
     alias: str | None = None,
     prefix: str = "FLAG",
     *,
@@ -45,13 +45,13 @@ def flag(
         The DataFrame the function is applied to.
     ref_col : str
         The column title that the conditions are performing checks upon.
-    condition : typing.Literal["==", "!=", ">", ">=", "<", "<=", "isNull", "isNotNull", "regex"], optional
+    condition : {"==", "!=", ">", ">=", "<", "<=", "isNull", "isNotNull", "regex"}, optional
         Conditional statements used to compare values to the ref_col.
         Defaults to None.
-    condition_value : Any, optional
-        The value the ``ref_col`` is being compared against. Defaults to
+    condition_value : optional
+        The value the `ref_col` is being compared against. Defaults to
         None.
-    condition_col : Any, optional
+    condition_col : str, optional
         Comparison column for flag condition. Defaults to None.
     alias : str, optional
         Alias for flag column. Defaults to None.
@@ -111,55 +111,57 @@ def flag(
         alias = f"{prefix}_{ref_col}{condition}"
 
     if condition == "==" and condition_col is not None:
-        df = df.withColumn(alias, F.col(ref_col) == F.col(condition_col))
+        df = df.withColumn(alias, sf.col(ref_col) == sf.col(condition_col))
 
     if condition == "==" and condition_col is None:
-        df = df.withColumn(alias, F.col(ref_col) == condition_value)
+        df = df.withColumn(alias, sf.col(ref_col) == condition_value)
 
     if condition == ">" and condition_col is not None:
-        df = df.withColumn(alias, F.col(ref_col) > F.col(condition_col))
+        df = df.withColumn(alias, sf.col(ref_col) > sf.col(condition_col))
 
     if condition == ">" and condition_col is None:
-        df = df.withColumn(alias, F.col(ref_col) > condition_value)
+        df = df.withColumn(alias, sf.col(ref_col) > condition_value)
 
     if condition == ">=" and condition_col is not None:
-        df = df.withColumn(alias, F.col(ref_col) >= F.col(condition_col))
+        df = df.withColumn(alias, sf.col(ref_col) >= sf.col(condition_col))
 
     if condition == ">=" and condition_col is None:
-        df = df.withColumn(alias, F.col(ref_col) >= condition_value)
+        df = df.withColumn(alias, sf.col(ref_col) >= condition_value)
 
     if condition == "<" and condition_col is not None:
-        df = df.withColumn(alias, F.col(ref_col) < F.col(condition_col))
+        df = df.withColumn(alias, sf.col(ref_col) < sf.col(condition_col))
 
     if condition == "<" and condition_col is None:
-        df = df.withColumn(alias, F.col(ref_col) < condition_value)
+        df = df.withColumn(alias, sf.col(ref_col) < condition_value)
 
     if condition == "<=" and condition_col is not None:
-        df = df.withColumn(alias, F.col(ref_col) <= F.col(condition_col))
+        df = df.withColumn(alias, sf.col(ref_col) <= sf.col(condition_col))
 
     if condition == "<=" and condition_col is None:
-        df = df.withColumn(alias, F.col(ref_col) <= condition_value)
+        df = df.withColumn(alias, sf.col(ref_col) <= condition_value)
 
     if condition == "!=" and condition_col is not None:
-        df = df.withColumn(alias, F.col(ref_col) != F.col(condition_col))
+        df = df.withColumn(alias, sf.col(ref_col) != sf.col(condition_col))
 
     if condition == "!=" and condition_col is None:
-        df = df.withColumn(alias, F.col(ref_col) != condition_value)
+        df = df.withColumn(alias, sf.col(ref_col) != condition_value)
 
     if condition == "isNull":
-        df = df.withColumn(alias, (F.col(ref_col).isNull()) | (F.isnan(F.col(ref_col))))
+        df = df.withColumn(
+            alias, (sf.col(ref_col).isNull()) | (sf.isnan(sf.col(ref_col)))
+        )
 
     if condition == "isNotNull":
         df = df.withColumn(
-            alias, (F.col(ref_col).isNotNull()) & ~(F.isnan(F.col(ref_col)))
+            alias, (sf.col(ref_col).isNotNull()) & ~(sf.isnan(sf.col(ref_col)))
         )
 
     if condition == "regex":
-        df = df.withColumn(alias, (F.col(ref_col).rlike(condition_value)))
+        df = df.withColumn(alias, (sf.col(ref_col).rlike(condition_value)))
 
     if fill_null is not None:
         df = df.withColumn(
-            alias, F.when(F.col(alias).isNull(), fill_null).otherwise(F.col(alias))
+            alias, sf.when(sf.col(alias).isNull(), fill_null).otherwise(sf.col(alias))
         )
 
     return df
@@ -184,7 +186,7 @@ def flag_check(
     count column are greater than 0, the overall fail value for this row
     will be True so this is quickly highlighted to the user.
 
-    Option to produce flag summary stats employing ``flag_summary``.
+    Option to produce flag summary stats employing `flag_summary`.
     Option to return full DataFrame, only passes, only fails, or passes
     and fails(residuals) as two separate dataframes.
 
@@ -197,10 +199,10 @@ def flag_check(
         to "FLAG_".
     flags : list[str], optional
         List of flag manually specified flags to operate the function
-        on. If this is kept as default value, all columns in ``df`` that
+        on. If this is kept as default value, all columns in `df` that
         start with "FLAG_" are assumed to be flag columns by the
         function. Defaults to None.
-    mode : typing.Literal["master", "split", "pass", "fail"], optional
+    mode : {"master", "split", "pass", "fail"}, optional
         "master": returns all results (full DataFrame). "pass": only
         returns rows where pass is True. "fail": only returns rows where
         fail is True. "split": returns two separate DataFrames for both
@@ -211,7 +213,10 @@ def flag_check(
 
     Returns
     -------
-    pyspark.sql.DataFrame | tuple[pyspark.sql.DataFrame, pyspark.sql.DataFrame | pandas.DataFrame] | tuple[pyspark.sql.DataFrame, pyspark.sql.DataFrame, pyspark.sql.DataFrame | pandas.DataFrame]
+    pyspark.sql.DataFrame | tuple[pyspark.sql.DataFrame,
+    pyspark.sql.DataFrame | pandas.DataFrame] |
+    tuple[pyspark.sql.DataFrame, pyspark.sql.DataFrame,
+    pyspark.sql.DataFrame | pandas.DataFrame]
         Returns DataFrame with results depending on the mode argument.
         If the mode argument is set to split, it will return two
         DataFrames.
@@ -255,43 +260,43 @@ def flag_check(
 
     if len(flags) == 0:
         print(
-            "No flag columns found! Please specify which flag column to summarise\
-        with the flags = argument, or specify the correct prefix"
+            "No flag columns found! Please specify which flag column to summarise with"
+            "the flags = argument, or specify the correct prefix"
         )
 
-    df = df.withColumn("flag_count", F.lit(0))
+    df = df.withColumn("flag_count", sf.lit(0))
 
     for flag in flags:
         df = df.withColumn(
             "flag_count",
-            F.when(F.col(flag), F.col("flag_count") + F.lit(1)).otherwise(
-                F.col("flag_count")
+            sf.when(sf.col(flag), sf.col("flag_count") + sf.lit(1)).otherwise(
+                sf.col("flag_count")
             ),
         )
 
     df = df.withColumn(
-        "FAIL", reduce(add, [F.col(flag).cast(IntegerType()) for flag in flags])
+        "FAIL", reduce(add, [sf.col(flag).cast(IntegerType()) for flag in flags])
     )
-    df = df.withColumn("FAIL", F.col("FAIL") > 0)
+    df = df.withColumn("FAIL", sf.col("FAIL") > 0)
 
     if summary is True:
-        summary_df = flag_summary(df, flags + ["FAIL"], pandas=False)
+        summary_df = flag_summary(df, [*flags, "FAIL"], pandas=False)
 
         if mode == "master":
             return (df, summary_df)
 
         if mode == "split":
             return (
-                (df.where(F.col("FAIL") == F.lit(False))),
-                (df.where(F.col("FAIL") == F.lit(True))),
+                (df.where(sf.col("FAIL") == sf.lit(col=False))),
+                (df.where(sf.col("FAIL") == sf.lit(col=True))),
                 summary_df,
             )
 
         if mode == "pass":
-            return (df.where(F.col("FAIL") == F.lit(False)), summary_df)
+            return (df.where(sf.col("FAIL") == sf.lit(col=False)), summary_df)
 
         if mode == "fail":
-            return (df.where(F.col("FAIL") == F.lit(True)), summary_df)
+            return (df.where(sf.col("FAIL") == sf.lit(col=True)), summary_df)
 
     else:
         if mode == "master":
@@ -299,15 +304,17 @@ def flag_check(
 
         if mode == "split":
             return (
-                (df.where(F.col("FAIL") == F.lit(False))),
-                (df.where(F.col("FAIL") == F.lit(True))),
+                (df.where(sf.col("FAIL") == sf.lit(col=False))),
+                (df.where(sf.col("FAIL") == sf.lit(col=True))),
             )
 
         if mode == "pass":
-            return df.where(F.col("FAIL") == F.lit(False))
+            return df.where(sf.col("FAIL") == sf.lit(col=False))
 
         if mode == "fail":
-            return df.where(F.col("FAIL") == F.lit(True))
+            return df.where(sf.col("FAIL") == sf.lit(col=True))
+
+    return df
 
 
 def flag_summary(
@@ -363,10 +370,9 @@ def flag_summary(
 
     rows = df.count()
 
-    flags_out = []
-
-    for col in flags:
-        flags_out.append((df.select(col).where(F.col(col) == F.lit(True)).count()))
+    flags_out = [
+        df.select(col).where(sf.col(col) == sf.lit(col=True)).count() for col in flags
+    ]
 
     out = pd.DataFrame(
         {

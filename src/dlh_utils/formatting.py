@@ -126,7 +126,7 @@ def copy_local_file_to_hdfs(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    stdout, stderr = process.communicate()
+    _stdout, _stderr = process.communicate()
 
 
 def export_to_excel(
@@ -134,7 +134,7 @@ def export_to_excel(
     | list[DataFrame | pd.DataFrame]
     | DataFrame
     | pd.DataFrame,
-    styles: dict | None = None,
+    styles: dict[Any, Any] | None = None,
     columns: list[str] | dict[str, list[str]] | None = None,
     freeze_panes: dict[str, tuple[int, int]] | None = None,
     local_path: str | None = None,
@@ -155,7 +155,7 @@ def export_to_excel(
         to Pandas. A single DataFrame can also be passed for this
         argument.
     styles : optional
-        A dictionary to pass to ``apply_excel_styles``. See the
+        A dictionary to pass to `apply_excel_styles`. See the
         documentation for that function for more information. Defaults
         to None.
     columns : optional
@@ -200,11 +200,11 @@ def export_to_excel(
           negative/positive.
         - age is formatted in bold if the person is a child.
 
-    Note the use of ``partial`` to set values for the parameters when we
+    Note the use of `partial` to set values for the parameters when we
     don't want to use their default values.
 
-    See ``apply_styles`` and the ``style_*`` functions for more
-    information on these functions.
+    See `apply_styles` and the `style_*` functions for more information
+    on these functions.
 
     >>> from functools import partial
     >>> write_excel(
@@ -222,7 +222,8 @@ def export_to_excel(
     ... )
     """
     if hdfs_path is not None and local_path is None:
-        raise ValueError("Can't save to HDFS without also specifying a local path")
+        error_message = "Can't save to HDFS without also specifying a local path"
+        raise ValueError(error_message)
     if columns is None:
         columns = {}
     if isinstance(dataframes, list):
@@ -232,12 +233,12 @@ def export_to_excel(
 
     if isinstance(columns, list):
         if len(dataframes) > 1:
-            raise ValueError(
-                "Can't pass a list of columns to write_excel "
-                "unless you only passed in a single dataframe. "
-                "You can use a dictionary instead "
-                "(see this function's docstring for an example)"
+            error_message = (
+                "Can't pass a list of columns to write_excel unless you only passed in"
+                " a single dataframe. You can use a dictionary instead (see this "
+                "function's docstring for an example)."
             )
+            raise ValueError(error_message)
         columns = {"Sheet1": columns}
 
     # Set up the workbook
@@ -280,9 +281,9 @@ def export_to_excel(
 
 
 def style_colour_gradient(
-    value,
-    min,
-    max,
+    value: Any,
+    min: Any,
+    max: Any,
     property: str = "background-color",
     min_colour: str = "#FFFFFF",
     max_colour: str = "#FF0000",
@@ -326,11 +327,40 @@ def style_colour_gradient(
     -------
     str
     """
+    try:
+        # Extract colour channels from parameters
+        min_colour = min_colour.replace("#", "")
+        max_colour = max_colour.replace("#", "")
+        min_channels = [int(min_colour[i : i + 2], 16) for i in (0, 2, 4)]
+        max_channels = [int(max_colour[i : i + 2], 16) for i in (0, 2, 4)]
+
+        # Interpolate
+        position = (value - min) / (max - min)
+        interpolated_channels = [0, 0, 0]
+        for c in range(3):
+            if max_channels[c] > min_channels[c]:
+                val = int(
+                    position * (max_channels[c] - min_channels[c]) + min_channels[c]
+                )
+            else:
+                val = int(
+                    (1 - position) * (min_channels[c] - max_channels[c])
+                    + max_channels[c]
+                )
+            interpolated_channels[c] = ("0x%0*x" % (2, val))[2:].upper()
+
+        # Return the result
+        return property + " : #" + "".join(interpolated_channels) + ";"
+
+    except Exception as ex:
+        if error_colour is None:
+            raise ex
+        return property + " : #" + error_colour + ";"
 
 
 def style_map_values(
-    value,
-    mapping_dictionary: dict,
+    value: Any,
+    mapping_dictionary: dict[Any, Any],
     property: str = "background-color",
     default_style: str | None = None,
     error_style: str | None = None,
@@ -378,11 +408,11 @@ def style_map_values(
             style = default_style
         else:
             str_val = str(value)
-            raise ValueError(
-                f"Value {str_val} not found in "
-                "mapping_dictionary and no default_value "
-                "was specified."
+            error_message = (
+                f"Value {str_val} not found in mapping_dictionary and no default_value"
+                " was specified."
             )
+            raise ValueError(error_message)
         # Return the result
         return property + " : " + style + ";"
 
@@ -393,12 +423,12 @@ def style_map_values(
 
 
 def style_on_condition(
-    value,
+    value: Any,
     property: str = "font-weight",
     true_style: str = "bold",
     false_style: str = "normal",
     error_style: str | None = None,
-    condition=lambda x: x == 0,
+    condition: Any = lambda x: x == 0,
 ) -> str:
     """Return CSS style string based on a condition applied to a value.
 
@@ -444,36 +474,6 @@ def style_on_condition(
         if error_style is None:
             raise ex
         return property + " : " + error_style + ";"
-
-    try:
-        # Extract colour channels from parameters
-        min_colour = min_colour.replace("#", "")
-        max_colour = max_colour.replace("#", "")
-        min_channels = [int(min_colour[i : i + 2], 16) for i in (0, 2, 4)]
-        max_channels = [int(max_colour[i : i + 2], 16) for i in (0, 2, 4)]
-
-        # Interpolate
-        position = (value - min) / (max - min)
-        interpolated_channels = [0, 0, 0]
-        for c in range(3):
-            if max_channels[c] > min_channels[c]:
-                val = int(
-                    position * (max_channels[c] - min_channels[c]) + min_channels[c]
-                )
-            else:
-                val = int(
-                    (1 - position) * (min_channels[c] - max_channels[c])
-                    + max_channels[c]
-                )
-            interpolated_channels[c] = ("0x%0*x" % (2, val))[2:].upper()
-
-        # Return the result
-        return property + " : #" + "".join(interpolated_channels) + ";"
-
-    except Exception as ex:
-        if error_colour is None:
-            raise ex
-        return property + " : #" + error_colour + ";"
 
 
 def style_on_cutoff(
@@ -543,12 +543,11 @@ def style_on_cutoff(
         elif value == cutoff:
             return property + " : " + zero_style + ";"
         else:
-            raise ValueError(
-                "Value "
-                + str(value)
-                + " was not less than, equal to or greater than cutoff "
-                + str(cutoff)
+            error_message = (
+                f"Value {value} was not less than, equal to, or greater than cutoff "
+                f"{cutoff}."
             )
+            raise ValueError(error_message)
     except Exception as ex:
         if error_style is None:
             raise ex

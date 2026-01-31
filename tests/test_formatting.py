@@ -23,16 +23,20 @@ class TestApplyStyles:
             }
         )
 
-        # Default behaviour
+        # Default behaviour.
         sdf = apply_styles(df, {style_on_cutoff: "numeric_A"})
         style_applied = sdf.export()
-        # Only one style was applied
+
+        # Only one style was applied.
         assert len(style_applied) == 1
-        # Style was applied using applymap
+
+        # Style was applied using applymap.
         assert "Styler.applymap" in str(style_applied[0][0])
-        # Style was style_on_cutoff
+
+        # Style was style_on_cutoff.
         assert style_applied[0][1][0] == style_on_cutoff
-        # Style was applied to numeric_A only
+
+        # Style was applied to numeric_A only.
         assert style_applied[0][1][1] == "numeric_A"
 
     def test_default_two_styles(self) -> None:
@@ -45,18 +49,23 @@ class TestApplyStyles:
             }
         )
 
-        # Default behaviour with multiple columns
+        # Default behaviour with multiple columns.
         sdf = apply_styles(df, {style_on_condition: ["numeric_A", "numeric_B"]})
         style_applied = sdf.export()
-        # Two styles were applied
-        assert len(style_applied) == 2
-        # Styles were applied using applymap
+
+        # Two styles were applied.
+        expected_number_of_styles = 2
+        assert len(style_applied) == expected_number_of_styles
+
+        # Styles were applied using applymap.
         assert "Styler.applymap" in str(style_applied[0][0])
         assert "Styler.applymap" in str(style_applied[1][0])
-        # Styles were style_on_condition
+
+        # Styles were style_on_condition.
         assert style_applied[0][1][0] == style_on_condition
         assert style_applied[1][1][0] == style_on_condition
-        # Styles were applied to the appropriate columns
+
+        # Styles were applied to the appropriate columns.
         assert style_applied[0][1][1] == "numeric_A"
         assert style_applied[1][1][1] == "numeric_B"
 
@@ -73,16 +82,16 @@ class TestApplyStyles:
         sdf = apply_styles(df, {f: "numeric_A"})
         style_applied = sdf.export()
 
-        # Only one style was applied
+        # Only one style was applied.
         assert len(style_applied) == 1
 
-        # Style was applied using applymap
+        # Style was applied using applymap.
         assert "Styler.applymap" in str(style_applied[0][0])
 
-        # The right function was applied
+        # The right function was applied.
         assert style_applied[0][1][0] is f
 
-        # Style was applied to numeric_A only
+        # Style was applied to numeric_A only.
         assert style_applied[0][1][1] == "numeric_A"
 
     def test_default_custom_function(self) -> None:
@@ -95,23 +104,23 @@ class TestApplyStyles:
             }
         )
 
-        # User-defined function
-        def udf(x):
+        # User-defined function.
+        def udf(x: str) -> bool:
             return "a" in x.lower()
 
         sdf = apply_styles(df, {udf: "lastname"})
         style_applied = sdf.export()
 
-        # Only one style was applied
+        # Only one style was applied.
         assert len(style_applied) == 1
 
-        # Style was applied using applymap
+        # Style was applied using applymap.
         assert "Styler.applymap" in str(style_applied[0][0])
 
-        # The right function was applied
+        # The right function was applied.
         assert style_applied[0][1][0] is udf
 
-        # Style was applied to lastname only
+        # Style was applied to lastname only.
         assert style_applied[0][1][1] == "lastname"
 
 
@@ -129,10 +138,10 @@ class TestExportToExcel:
         assert len(wb.worksheets) == 1
         for i, c in enumerate(df.columns):
             assert (wb["Sheet1"].cell(1, i + 1).value) == c
-        for rownum in range(df.shape[0]):
+        for row_num in range(df.shape[0]):
             for i, c in enumerate(df.columns):
-                a = wb["Sheet1"].cell(rownum + 2, i + 1).value
-                b = df.loc[rownum, c]
+                a = wb["Sheet1"].cell(row_num + 2, i + 1).value
+                b = df.loc[row_num, c]
                 assert a == b
 
     def test_export_list_of_columns_one_sheet_df(self) -> None:
@@ -152,10 +161,10 @@ class TestExportToExcel:
         assert len(wb.worksheets) == 1
         for i, c in enumerate(["firstname", "numeric_A"]):
             assert (wb["Sheet1"].cell(1, i + 1).value) == c
-        for rownum in range(df.shape[0]):
+        for row_num in range(df.shape[0]):
             for i, c in enumerate(["firstname", "numeric_A"]):
-                a = wb["Sheet1"].cell(rownum + 2, i + 1).value
-                b = df.loc[rownum, c]
+                a = wb["Sheet1"].cell(row_num + 2, i + 1).value
+                b = df.loc[row_num, c]
                 assert a == b
 
     def test_export_two_dfs_two_sheets(self) -> None:
@@ -178,20 +187,21 @@ class TestExportToExcel:
         wb = export_to_excel(
             {"Dataframe A": df_a, "Dataframe B": df_b}, local_path="/tmp/pytest.xlsx"
         )
-        assert len(wb.worksheets) == 2
+        expected_number_of_sheets = 2
+        assert len(wb.worksheets) == expected_number_of_sheets
         for i, c in enumerate(df_a.columns):
             assert (wb["Dataframe A"].cell(1, i + 1).value) == c
-        for rownum in range(df_a.shape[0]):
+        for row_num in range(df_a.shape[0]):
             for i, c in enumerate(df_a.columns):
-                a = wb["Dataframe A"].cell(rownum + 2, i + 1).value
-                b = df_a.loc[rownum, c]
+                a = wb["Dataframe A"].cell(row_num + 2, i + 1).value
+                b = df_a.loc[row_num, c]
                 assert a == b
         for i, c in enumerate(df_b.columns):
             assert (wb["Dataframe B"].cell(1, i + 1).value) == c
-        for rownum in range(df_b.shape[0]):
+        for row_num in range(df_b.shape[0]):
             for i, c in enumerate(df_b.columns):
-                a = wb["Dataframe B"].cell(rownum + 2, i + 1).value
-                b = df_b.loc[rownum, c]
+                a = wb["Dataframe B"].cell(row_num + 2, i + 1).value
+                b = df_b.loc[row_num, c]
                 assert a == b
 
     def test_export_one_sheet_df_specify_columns(self) -> None:
@@ -212,10 +222,10 @@ class TestExportToExcel:
         assert len(wb.worksheets) == 1
         for i, c in enumerate(column_list):
             assert (wb["Dataframe C"].cell(1, i + 1).value) == c
-        for rownum in range(df.shape[0]):
+        for row_num in range(df.shape[0]):
             for i, c in enumerate(column_list):
-                a = wb["Dataframe C"].cell(rownum + 2, i + 1).value
-                b = df.loc[rownum, c]
+                a = wb["Dataframe C"].cell(row_num + 2, i + 1).value
+                b = df.loc[row_num, c]
                 assert a == b
 
     def test_export_one_sheet_df_with_basic_formatting(self) -> None:
@@ -287,7 +297,7 @@ class TestStyleMapValues:
         )
         assert result == "color : black;"
 
-        # NB 1 is truthy in Python, so this is expected behaviour
+        # NB 1 is truthy in Python, so this is expected behaviour.
         result = style_map_values(1, {True: "black", False: "red"}, property="color")
         assert result == "color : black;"
 
@@ -334,7 +344,6 @@ class TestStyleOnCondition:
 
 class TestStyleOnCutoff:
     def test_default_behaviour(self) -> None:
-        # Default behaviour
         result = style_on_cutoff(5)
         assert result == "background-color : green;"
         result = style_on_cutoff(0)

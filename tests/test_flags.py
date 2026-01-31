@@ -2,6 +2,7 @@ import pandas as pd
 from chispa import assert_df_equality
 from pandas.testing import assert_frame_equal
 from pyspark.sql import SparkSession
+from pyspark.testing import assertDataFrameEqual
 
 from dlh_utils.flags import flag, flag_check, flag_summary
 
@@ -32,7 +33,7 @@ class TestFlag:
                 }
             )
         )
-        assert_df_equality(intended_df, result_df, allow_nan_equality=True)
+        assertDataFrameEqual(intended_df, result_df)
 
     def test_expected_2(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
@@ -59,7 +60,7 @@ class TestFlag:
                 }
             )
         )
-        assert_df_equality(intended_df, result_df, allow_nan_equality=True)
+        assertDataFrameEqual(intended_df, result_df)
 
     def test_expected_3(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
@@ -86,7 +87,7 @@ class TestFlag:
                 }
             )
         )
-        assert_df_equality(result_df, intended_df, allow_nan_equality=True)
+        assertDataFrameEqual(result_df, intended_df)
 
     def test_expected_4(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
@@ -113,7 +114,7 @@ class TestFlag:
                 }
             )
         )
-        assert_df_equality(result_df, intended_df, allow_nan_equality=True)
+        assertDataFrameEqual(result_df, intended_df)
 
     def test_expected_5(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
@@ -140,9 +141,7 @@ class TestFlag:
                 }
             )
         )
-        assert_df_equality(
-            result_df, intended_df, allow_nan_equality=True, ignore_nullable=True
-        )
+        assertDataFrameEqual(result_df, intended_df)
 
     def test_expected_6(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
@@ -169,9 +168,7 @@ class TestFlag:
                 }
             )
         )
-        assert_df_equality(
-            result_df, intended_df, allow_nan_equality=True, ignore_nullable=True
-        )
+        assertDataFrameEqual(result_df, intended_df)
 
 
 class TestFlagSummary:
@@ -215,13 +212,7 @@ class TestFlagSummary:
                 }
             )
         )
-        assert_df_equality(
-            result,
-            expected,
-            allow_nan_equality=True,
-            ignore_nullable=True,
-            ignore_column_order=True,
-        )
+        assertDataFrameEqual(result, expected, ignoreColumnOrder=True)
 
     def test_expected_2(self, spark: SparkSession) -> None:
         df = spark.createDataFrame(
@@ -291,13 +282,7 @@ class TestFlagCheck:
             )
         )
         intended_df = intended_df1.union(intended_df2)
-        assert_df_equality(
-            result_df,
-            intended_df,
-            ignore_nullable=True,
-            ignore_column_order=True,
-            ignore_schema=True,
-        )
+        assertDataFrameEqual(result_df, intended_df, ignoreColumnOrder=True)
 
     def test_expected_2(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
@@ -319,13 +304,7 @@ class TestFlagCheck:
                 }
             )
         )
-        assert_df_equality(
-            result_df,
-            intended_df,
-            ignore_nullable=True,
-            ignore_column_order=True,
-            ignore_schema=True,
-        )
+        assertDataFrameEqual(result_df, intended_df, ignoreColumnOrder=True)
 
     def test_expected_3(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
@@ -343,13 +322,7 @@ class TestFlagCheck:
                 }
             )
         )
-        assert_df_equality(
-            result_df,
-            intended_df,
-            ignore_nullable=True,
-            ignore_column_order=True,
-            ignore_schema=True,
-        )
+        assertDataFrameEqual(result_df, intended_df, ignoreColumnOrder=True)
 
     def test_expected_4(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
@@ -367,13 +340,7 @@ class TestFlagCheck:
                 }
             )
         )
-        assert_df_equality(
-            result_df2,
-            intended_df,
-            ignore_nullable=True,
-            ignore_column_order=True,
-            ignore_schema=True,
-        )
+        assertDataFrameEqual(result_df2, intended_df, ignoreColumnOrder=True)
 
     def test_expected_5(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
@@ -414,20 +381,8 @@ class TestFlagCheck:
                 }
             )
         )
-        assert_df_equality(
-            result_df1,
-            intended_df1,
-            ignore_nullable=True,
-            ignore_column_order=True,
-            ignore_schema=True,
-        )
-        assert_df_equality(
-            result_df2,
-            intended_df2,
-            ignore_nullable=True,
-            ignore_column_order=True,
-            ignore_schema=True,
-        )
+        assertDataFrameEqual(result_df1, intended_df1, ignoreColumnOrder=True)
+        assertDataFrameEqual(result_df2, intended_df2, ignoreColumnOrder=True)
 
     def test_expected_6(self, spark: SparkSession) -> None:
         pretest_df_orig = spark.createDataFrame(
@@ -459,10 +414,4 @@ class TestFlagCheck:
                 }
             )
         )
-        assert_df_equality(
-            result_df,
-            intended_df,
-            ignore_nullable=True,
-            ignore_column_order=True,
-            ignore_schema=True,
-        )
+        assertDataFrameEqual(result_df, intended_df, ignoreColumnOrder=True)
