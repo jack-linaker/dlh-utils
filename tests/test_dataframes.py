@@ -524,23 +524,18 @@ class TestSelect:
 
 
 class TestSplit:
-    def test_expected(self, spark: SparkSession) -> None:
-        test_df = spark.createDataFrame(
-            pd.DataFrame(
-                {"before": ["a_b_c_d", None], "after": [["a", "b", "c", "d"], None]}
-            )
-        )
-        intended_df = spark.createDataFrame(
+    def test_split_to_new_column(self, spark: SparkSession) -> None:
+        input_df = spark.createDataFrame(pd.DataFrame({"before": ["a_b_c_d", None]}))
+        expected_output = spark.createDataFrame(
             pd.DataFrame(
                 {
                     "before": ["a_b_c_d", None],
                     "after": [["a", "b", "c", "d"], None],
-                    "new": [["a", "b", "c", "d"], None],
                 }
             )
         )
-        result_df = split(test_df, "before", col_out="new", split_on="_")
-        assertDataFrameEqual(intended_df, result_df)
+        actual_output = split(input_df, "before", col_out="after", split_on="_")
+        assertDataFrameEqual(expected_output, actual_output)
 
 
 class TestSubstring:

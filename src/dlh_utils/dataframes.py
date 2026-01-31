@@ -5,6 +5,7 @@ from typing import Any, Literal
 
 import pyspark.sql.functions as sf
 from pyspark.sql import DataFrame, Window
+from pyspark.sql.types import StringType
 
 from dlh_utils import standardisation
 
@@ -1310,23 +1311,19 @@ def split(
     pyspark.sql.DataFrame
         DataFrame with split array column.
     """
+    data_type = df.schema[col_in].dataType
+    if not isinstance(data_type, StringType):
+        error_message = f"Column {col_in!r} must be StringType, got {data_type}"
+        raise TypeError(error_message)
+
+    column = sf.col(col_in)
+    split_expression = sf.when(column.isNull(), None).otherwise(
+        sf.split(column, split_on)
+    )
+
     if col_out is None:
-        df = df.withColumn(
-            col_in,
-            sf.when(
-                (sf.col(col_in).isNull()) | (sf.isnan(sf.col(col_in))), None
-            ).otherwise(sf.split(sf.col(col_in), split_on)),
-        )
-
-    else:
-        df = df.withColumn(
-            col_out,
-            sf.when(
-                (sf.col(col_in).isNull()) | (sf.isnan(sf.col(col_in))), None
-            ).otherwise(sf.split(sf.col(col_in), split_on)),
-        )
-
-    return df
+        return df.withColumn(col_in, split_expression)
+    return df.withColumn(col_out, split_expression)
 
 
 def substring(
