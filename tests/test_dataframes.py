@@ -28,20 +28,14 @@ from dlh_utils.dataframes import (
 
 
 class TestCloneColumn:
-    def test_expected(self, spark: SparkSession) -> None:
-        test_df = spark.createDataFrame(
-            pd.DataFrame({"UPPER": ["ONE£", 'TW""O', "T^^HREE", "FO+UR", "FI@VE"]})
+    def test_clone_basic(self, spark: SparkSession) -> None:
+        input_data = [("alice", 25), ("bob", 42)]
+        input_df = spark.createDataFrame(input_data, schema=["name", "age"])
+        expected_output = spark.createDataFrame(
+            [("alice", 25, 25), ("bob", 42, 42)], schema=["name", "age", "age2"]
         )
-        intended_df = spark.createDataFrame(
-            pd.DataFrame(
-                {
-                    "UPPER": ["ONE£", 'TW""O', "T^^HREE", "FO+UR", "FI@VE"],
-                    "NEW": ["ONE£", 'TW""O', "T^^HREE", "FO+UR", "FI@VE"],
-                }
-            )
-        ).select("UPPER", "NEW")
-        result_df = clone_column(test_df, "UPPER", "NEW")
-        assertDataFrameEqual(intended_df, result_df)
+        actual_output = clone_column(input_df, "age", "age2")
+        assertDataFrameEqual(actual_output, expected_output)
 
 
 class TestCoalesced:
@@ -137,7 +131,7 @@ class TestConcat:
             sep="_",
             columns=["firstname", "middle_name", "lastname"],
         )
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
 
 
 class TestCutOff:
@@ -232,7 +226,7 @@ class TestDateDiff:
         result_df = date_diff(
             test_df, "dob", "today", in_date_format="yyyy-MM-dd", units="days"
         )
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
         intended_df_2 = spark.createDataFrame(
             pd.DataFrame(
                 {
@@ -259,7 +253,7 @@ class TestDateDiff:
         result_df2 = date_diff(
             test_df, "dob", "today", in_date_format="yyyy-MM-dd", units="months"
         )
-        assertDataFrameEqual(intended_df_2, result_df2, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df_2, result_df2)
         intended_df_3 = spark.createDataFrame(
             pd.DataFrame(
                 {
@@ -286,7 +280,7 @@ class TestDateDiff:
         result_df3 = date_diff(
             test_df, "dob", "today", in_date_format="yyyy-MM-dd", units="years"
         )
-        assertDataFrameEqual(intended_df_3, result_df3, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df_3, result_df3)
 
 
 class TestDropColumns:
@@ -540,7 +534,7 @@ class TestSplit:
 
 class TestSubstring:
     def test_expected(self, spark: SparkSession) -> None:
-        test_df = spark.createDataFrame(
+        input_df = spark.createDataFrame(
             pd.DataFrame(
                 {
                     "NEW": ["ONE", "TWO", "THREE", "FOUR"],
@@ -549,7 +543,7 @@ class TestSubstring:
                 }
             )
         )
-        intended_df = spark.createDataFrame(
+        expected_output = spark.createDataFrame(
             pd.DataFrame(
                 {
                     "NEW": ["ONE", "TWO", "THREE", "FOUR"],
@@ -558,9 +552,9 @@ class TestSubstring:
                     "final": ["ONE", "TWO", "THR", "FOU"],
                 }
             )
-        ).select("NEW", "end", "start", "final")
-        result_df = substring(test_df, "final", "NEW", 1, 3)
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        )
+        actual_output = substring(input_df, "final", "NEW", 1, 3)
+        assertDataFrameEqual(expected_output, actual_output)
 
 
 class TestSuffixColumns:

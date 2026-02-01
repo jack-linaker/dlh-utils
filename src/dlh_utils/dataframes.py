@@ -31,28 +31,23 @@ def clone_column(df: DataFrame, target: str, clone: str) -> DataFrame:
 
     Examples
     --------
+    >>> data = [("alice", 25), ("bob", 42)]
+    >>> df = spark.createDataFrame(data, schema=["name", "age"])
     >>> df.show()
-    +---+--------+-----------+-------+----------+---+--------+
-    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|
-    +---+--------+-----------+-------+----------+---+--------+
-    |  1|   Homer|        Jay|Simpson|1983-05-12|  M|ET74 2SP|
-    |  2|   Marge|     Juliet|Simpson|1983-03-19|  F|ET74 2SP|
-    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  4|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|
-    |  5|  Maggie|       null|Simpson|2021-01-12|  F|ET74 2SP|
-    +---+--------+-----------+-------+----------+---+--------+
-    >>> clone_column(df, target="Sex", clone="Gender").show()
-    +---+--------+-----------+-------+----------+---+--------+------+
-    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|Gender|
-    +---+--------+-----------+-------+----------+---+--------+------+
-    |  1|   Homer|        Jay|Simpson|1983-05-12|  M|ET74 2SP|     M|
-    |  2|   Marge|     Juliet|Simpson|1983-03-19|  F|ET74 2SP|     F|
-    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|     M|
-    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|     M|
-    |  4|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|     F|
-    |  5|  Maggie|       null|Simpson|2021-01-12|  F|ET74 2SP|     F|
-    +---+--------+-----------+-------+----------+---+--------+------+
+    +-----+---+
+    | name|age|
+    +-----+---+
+    |alice| 25|
+    |  bob| 42|
+    +-----+---+
+
+    >>> clone_column(df, target="age", clone="age2").show()
+    +-----+---+----+
+    | name|age|age2|
+    +-----+---+----+
+    |alice| 25|  25|
+    |  bob| 42|  42|
+    +-----+---+----+
     """
     return df.withColumn(clone, sf.col(target))
 
