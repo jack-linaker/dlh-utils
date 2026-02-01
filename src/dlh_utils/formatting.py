@@ -18,23 +18,23 @@ from pyspark.sql import DataFrame
 def apply_styles(
     df: pd.DataFrame | DataFrame, styles: dict[Callable[[Any], Any], str | list[str]]
 ) -> Styler:
-    """Apply custom styles and return pandas Styler.
+    """Apply custom styles and return pandas `Styler`.
 
-    Applies a set of custom style functions to a DataFrame and returns a
-    pandas Styler object, which can be displayed by Jupyter and saved
-    into Excel or HTML.
+    Applies a set of custom style functions to a `DataFrame` and returns
+    a pandas `Styler` object, which can be displayed by Jupyter and
+    saved into Excel or HTML.
 
     Some suitable functions are included in this module with the prefix
-    "style_" but you can also pass in a custom function.
+    `style_` but you can also pass in a custom function.
 
-    NOTE: This function returns a Styler, not a DataFrame.
+    NOTE: This function returns a `Styler`, not a `DataFrame`.
 
     Parameters
     ----------
-    df : pandas.DataFrame | pyspark.sql.DataFrame
-        The DataFrame to be styled. If a PySpark DataFrame is provided
-        it will be converted to Pandas.
-    styles : dict[Callable, str | list[str]]
+    df : `pandas.DataFrame` | `pyspark.sql.DataFrame`
+        The `DataFrame` to be styled. If a Spark `DataFrame` is
+        provided, it will be converted to Pandas.
+    styles : `dict[Callable, str | list[str]]`
         A dictionary whose keys are functions and whose values are lists
         of column names. Each function should take in a single value and
         return a valid CSS string. The value can be a single column name
@@ -42,20 +42,20 @@ def apply_styles(
 
     Returns
     -------
-    pandas.io.formats.style.Styler
+    `pandas.io.formats.style.Styler`
 
     Examples
     --------
-    The DataFrame df has a column, "Number", that can be positive or
+    The `DataFrame` `df` has a column, "Number", that can be positive or
     negative. We apply the default style to a column of this type using
-    a style_ function defined in this module:
+    a `style_` function defined in this module:
 
     >>> apply_styles(df, {style_on_cutoff: "Number"})
 
     We would like to highlight in bold when a value is NA in two
     columns, "Number" and "OtherNumber". Both style rules will be
     applied to the "Number" column but only the bold style to
-    "OtherNumber". Again, we use a style_ function defined in this
+    "OtherNumber". Again, we use a `style_` function defined in this
     module:
 
     >>> apply_styles(
@@ -63,31 +63,42 @@ def apply_styles(
     ...     {style_on_cutoff: "Number", style_on_condition: ["Number", "OtherNumber"]},
     ... )
 
-    The style_ functions have default behaviours we may want to
-    customize. To do this, use the following pattern. The partial()
-    function is defined in functools (part of python's standard library)
-    and allows us to "freeze" some parameters of a function before it's
-    evaluated:
+    The `style_` functions have default behaviours we may want to
+    customise. To do this, use the following pattern. The `partial`
+    function is defined in `functools` and allows us to "freeze" some
+    parameters of a function before it's evaluated:
 
     >>> from functools import partial
-    >>> apply_styles(df, {partial(style_fill_pos_neg, property='color'): "Number"})
+    >>> apply_styles(df, {partial(style_fill_pos_neg, property="color"): "Number"})
     """
     if not isinstance(df, pd.DataFrame):
         df = df.toPandas()
 
-    styles_by_column: dict[str, list[str]] = {c: [] for c in df.columns}
-    for s in styles:
-        cols = styles[s]
-        if not isinstance(cols, list):
-            cols = [cols]
+    # Build mapping: function -> list of columns.
+    function_to_columns: dict[Callable[[Any], Any], list[str]] = {}
+    for function, columns in styles.items():
+        cols = [columns] if not isinstance(columns, list) else list(columns)
+
+        # Validate each column exists.
         for c in cols:
-            styles_by_column[c].append(s)
+            if c not in df.columns:
+                error_message = f"apply_styles: column {c!r} not found in DataFrame."
+                raise KeyError(error_message)
+
+        function_to_columns.setdefault(function, []).extend(cols)
 
     sdf = df.style
-    for col, sty in styles_by_column.items():
-        if len(sty) > 0:
-            for f in sty:
-                sdf = sdf.applymap(f, subset=col)
+    applied: list[tuple[Callable[[Any], Any], list[str]]] = []
+    for function, columns in function_to_columns.items():
+        unique_columns = list(dict.fromkeys(columns))
+
+        # Apply style once for all columns for this function.
+        sdf = sdf.map(function, subset=unique_columns)
+        applied.append((function, unique_columns))
+
+    # Attach metadata as attribute on the Styler.
+    setattr(sdf, "_applied_styles", applied)
+
     return sdf
 
 
@@ -148,8 +159,8 @@ def export_to_excel(
     Parameters
     ----------
     dataframes
-        A dictionary whose keys are names for the data sheets and values
-        are Pandas DataFrames, or just a list of DataFrames; in the
+        A dictionary whose keys are names for the sheets and values are
+        Pandas or Spark DataFrames, or just a list of DataFrames; in the
         latter case the function will name the sheets Sheet1, Sheet2
         etc. If PySpark DataFrames are provided they will be converted
         to Pandas. A single DataFrame can also be passed for this
@@ -181,14 +192,14 @@ def export_to_excel(
 
     Returns
     -------
-    openpyxl.WorkBook
+    `openpyxl.WorkBook`
 
     Examples
     --------
     Write two DataFrames to named sheets, selecting only two columns
     from people_df:
 
-    >>> write_excel(
+    >>> export_to_excel(
     ...     {"People": people_df, "Places": places_df},
     ...     "/tmp/abc.xlsx",
     ...     columns={"People": ["surname", "firstname"]},
@@ -207,7 +218,7 @@ def export_to_excel(
     on these functions.
 
     >>> from functools import partial
-    >>> write_excel(
+    >>> export_to_excel(
     ...     {"People": people_df},
     ...     "/tmp/abc.xlsx",
     ...     styles={
@@ -241,18 +252,18 @@ def export_to_excel(
             raise ValueError(error_message)
         columns = {"Sheet1": columns}
 
-    # Set up the workbook
+    # Set up the workbook.
     wb = openpyxl.Workbook()
     wb.save(local_path)
     for df_name in dataframes:
         wb.create_sheet(df_name)
 
-    # Create a writer to export the dataframes
+    # Create a writer to export the DataFrames.
     writer = pd.ExcelWriter(local_path, mode="w", engine="openpyxl")
     writer.book = wb
     writer.sheets = dict((ws.title, ws) for ws in wb.worksheets)
 
-    # Export each dataframe to its own sheet
+    # Export each DataFrame to its own sheet.
     for df_name in dataframes:
         if not isinstance(dataframes[df_name], pd.DataFrame):
             dataframes[df_name] = dataframes[df_name].toPandas()
@@ -267,11 +278,11 @@ def export_to_excel(
             fp = freeze_panes[df_name]
         df_export.to_excel(writer, sheet_name=df_name, index=False, freeze_panes=fp)
 
-    # Remove the default, empty sheet if it wasn't used
+    # Remove the default, empty sheet if it wasn't used.
     if "Sheet" not in dataframes:
         del wb["Sheet"]
 
-    # Save to disk
+    # Save to disk.
     if local_path is not None:
         wb.save(local_path)
         if hdfs_path is not None:

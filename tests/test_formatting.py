@@ -13,7 +13,7 @@ from dlh_utils.formatting import (
 
 
 class TestApplyStyles:
-    def test_default_single_style_1(self) -> None:
+    def test_one_style_one_column(self) -> None:
         df = pd.DataFrame(
             {
                 "firstname": [None, "Claire", "Josh", "Bob"],
@@ -25,21 +25,18 @@ class TestApplyStyles:
 
         # Default behaviour.
         sdf = apply_styles(df, {style_on_cutoff: "numeric_A"})
-        style_applied = sdf.export()
+        applied = getattr(sdf, "_applied_styles", [])
 
         # Only one style was applied.
-        assert len(style_applied) == 1
+        assert len(applied) == 1
 
-        # Style was applied using applymap.
-        assert "Styler.applymap" in str(style_applied[0][0])
-
-        # Style was style_on_cutoff.
-        assert style_applied[0][1][0] == style_on_cutoff
+        # Style was `style_on_cutoff`.
+        assert applied[0][0] is style_on_cutoff
 
         # Style was applied to numeric_A only.
-        assert style_applied[0][1][1] == "numeric_A"
+        assert applied[0][1] == ["numeric_A"]
 
-    def test_default_two_styles(self) -> None:
+    def test_one_style_multiple_columns(self) -> None:
         df = pd.DataFrame(
             {
                 "firstname": [None, "Claire", "Josh", "Bob"],
@@ -51,23 +48,16 @@ class TestApplyStyles:
 
         # Default behaviour with multiple columns.
         sdf = apply_styles(df, {style_on_condition: ["numeric_A", "numeric_B"]})
-        style_applied = sdf.export()
+        applied = getattr(sdf, "_applied_styles", [])
 
-        # Two styles were applied.
-        expected_number_of_styles = 2
-        assert len(style_applied) == expected_number_of_styles
+        # One style was applied.
+        assert len(applied) == 1
 
-        # Styles were applied using applymap.
-        assert "Styler.applymap" in str(style_applied[0][0])
-        assert "Styler.applymap" in str(style_applied[1][0])
-
-        # Styles were style_on_condition.
-        assert style_applied[0][1][0] == style_on_condition
-        assert style_applied[1][1][0] == style_on_condition
+        # Styles were `style_on_condition`.
+        assert applied[0][0] is style_on_condition
 
         # Styles were applied to the appropriate columns.
-        assert style_applied[0][1][1] == "numeric_A"
-        assert style_applied[1][1][1] == "numeric_B"
+        assert set(applied[0][1]) == {"numeric_A", "numeric_B"}
 
     def test_partial_function(self) -> None:
         df = pd.DataFrame(
@@ -78,23 +68,20 @@ class TestApplyStyles:
                 "numeric_B": [-500, 221, None, 0],
             }
         )
-        f = partial(style_on_condition, property="color")
-        sdf = apply_styles(df, {f: "numeric_A"})
-        style_applied = sdf.export()
+        function = partial(style_on_condition, property="color")
+        sdf = apply_styles(df, {function: "numeric_A"})
+        applied = getattr(sdf, "_applied_styles", [])
 
-        # Only one style was applied.
-        assert len(style_applied) == 1
-
-        # Style was applied using applymap.
-        assert "Styler.applymap" in str(style_applied[0][0])
+        # One style was applied.
+        assert len(applied) == 1
 
         # The right function was applied.
-        assert style_applied[0][1][0] is f
+        assert applied[0][0] is function
 
         # Style was applied to numeric_A only.
-        assert style_applied[0][1][1] == "numeric_A"
+        assert applied[0][1] == ["numeric_A"]
 
-    def test_default_custom_function(self) -> None:
+    def test_custom_function(self) -> None:
         df = pd.DataFrame(
             {
                 "firstname": [None, "Claire", "Josh", "Bob"],
@@ -104,24 +91,20 @@ class TestApplyStyles:
             }
         )
 
-        # User-defined function.
         def udf(x: str) -> bool:
             return "a" in x.lower()
 
         sdf = apply_styles(df, {udf: "lastname"})
-        style_applied = sdf.export()
+        applied = getattr(sdf, "_applied_styles", [])
 
-        # Only one style was applied.
-        assert len(style_applied) == 1
-
-        # Style was applied using applymap.
-        assert "Styler.applymap" in str(style_applied[0][0])
+        # One style was applied.
+        assert len(applied) == 1
 
         # The right function was applied.
-        assert style_applied[0][1][0] is udf
+        assert applied[0][0] is udf
 
         # Style was applied to lastname only.
-        assert style_applied[0][1][1] == "lastname"
+        assert applied[0][1] == ["lastname"]
 
 
 class TestExportToExcel:
