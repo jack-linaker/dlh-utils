@@ -1,5 +1,4 @@
 import pandas as pd
-from chispa import assert_df_equality
 from pandas.testing import assert_frame_equal
 from pyspark.sql import SparkSession
 from pyspark.testing import assertDataFrameEqual
@@ -171,6 +170,136 @@ class TestFlag:
         assertDataFrameEqual(result_df, intended_df)
 
 
+class TestFlagCheck:
+    def test_expected_1(self, spark: SparkSession) -> None:
+        input_df = spark.createDataFrame(
+            pd.DataFrame({"FLAG_1": ([True] * 50) + ([False] * 50)})
+        )
+        expected_df1 = spark.createDataFrame(
+            pd.DataFrame(
+                {"FLAG_1": ([True] * 50), "flag_count": [1] * 50, "FAIL": [True] * 50}
+            )
+        )
+        expected_df2 = spark.createDataFrame(
+            pd.DataFrame(
+                {"FLAG_1": ([False] * 50), "flag_count": [0] * 50, "FAIL": [False] * 50}
+            )
+        )
+        expected_output = expected_df1.union(expected_df2)
+        actual_output = flag_check(input_df)
+        assertDataFrameEqual(actual_output, expected_output)
+
+    def test_expected_2(self, spark: SparkSession) -> None:
+        input_df = spark.createDataFrame(
+            pd.DataFrame({"FLAG_1": ([True] * 50) + ([False] * 50)})
+        )
+        expected_output = spark.createDataFrame(
+            pd.DataFrame(
+                {"FLAG_1": ([False] * 50), "flag_count": [0] * 50, "FAIL": [False] * 50}
+            )
+        )
+        actual_output = flag_check(input_df, mode="pass")
+        assertDataFrameEqual(actual_output, expected_output)
+
+    def test_expected_3(self, spark: SparkSession) -> None:
+        input_df = spark.createDataFrame(
+            pd.DataFrame({"FLAG_1": ([True] * 50) + ([False] * 50)})
+        )
+        expected_output = spark.createDataFrame(
+            pd.DataFrame(
+                {"FLAG_1": ([True] * 50), "flag_count": [1] * 50, "FAIL": [True] * 50}
+            )
+        )
+        actual_output = flag_check(input_df, mode="fail")
+        assertDataFrameEqual(actual_output, expected_output)
+
+    def test_expected_4(self, spark: SparkSession) -> None:
+        input_df = spark.createDataFrame(
+            pd.DataFrame({"FLAG_1": [True] * 50 + [False] * 50})
+        )
+        expected_output = spark.createDataFrame(
+            pd.DataFrame(
+                {
+                    "FLAG_1": ([True] * 50),
+                    "flag_count": [1] * 50,
+                    "FAIL": [True] * 50,
+                }
+            )
+        )
+        actual_output = flag_check(input_df, mode="split")[1]
+        assertDataFrameEqual(actual_output, expected_output)
+
+    def test_expected_5(self, spark: SparkSession) -> None:
+        input_df = spark.createDataFrame(
+            pd.DataFrame({"FLAG_1": [True] * 50 + [False] * 50})
+        )
+        expected_output_1 = spark.createDataFrame(
+            pd.concat(
+                [
+                    pd.DataFrame(
+                        {
+                            "FLAG_1": [True] * 50,
+                            "flag_count": [1] * 50,
+                            "FAIL": [True] * 50,
+                        }
+                    ),
+                    pd.DataFrame(
+                        {
+                            "FLAG_1": [False] * 50,
+                            "flag_count": [0] * 50,
+                            "FAIL": [False] * 50,
+                        }
+                    ),
+                ]
+            )
+        )
+        expected_output_2 = spark.createDataFrame(
+            pd.DataFrame(
+                {
+                    "flag": ["FLAG_1", "FAIL"],
+                    "true": [50] * 2,
+                    "false": [50] * 2,
+                    "rows": [100] * 2,
+                    "percent_true": [50.0] * 2,
+                    "percent_false": [50.0] * 2,
+                }
+            )
+        )
+        actual_output_1, actual_output_2 = flag_check(input_df, summary=True)
+        assertDataFrameEqual(actual_output_1, expected_output_1)
+        assertDataFrameEqual(actual_output_2, expected_output_2)
+
+    def test_expected_6(self, spark: SparkSession) -> None:
+        pretest_df_orig = spark.createDataFrame(
+            pd.DataFrame({"FLAG_1": [True] * 50 + [False] * 50})
+        )
+        pretest_df2 = flag_check(pretest_df_orig, summary=True)[1]
+        test_df = (
+            pretest_df2.toPandas()
+            == spark.createDataFrame(
+                [
+                    ("FLAG_1", 50, 50, 100, 50.0, 50.0),
+                    ("FAIL", 50, 50, 100, 50.0, 50.0),
+                ],
+                ["flag", "true", "false", "rows", "percent_true", "percent_false"],
+            ).toPandas()
+        )
+        result_df = spark.createDataFrame(test_df)
+        intended_df = spark.createDataFrame(
+            pd.DataFrame(
+                {
+                    "flag": [True] * 2,
+                    "true": [True] * 2,
+                    "false": [True] * 2,
+                    "rows": [True] * 2,
+                    "percent_true": [True] * 2,
+                    "percent_false": [True] * 2,
+                }
+            )
+        )
+        assertDataFrameEqual(result_df, intended_df)
+
+
 class TestFlagSummary:
     def test_expected_1(self, spark: SparkSession) -> None:
         df = spark.createDataFrame(
@@ -253,165 +382,3 @@ class TestFlagSummary:
             }
         )
         assert_frame_equal(result, expected, check_like=True)
-
-
-class TestFlagCheck:
-    def test_expected_1(self, spark: SparkSession) -> None:
-        test_df = spark.createDataFrame(
-            pd.DataFrame({"FLAG_1": ([True] * 50) + ([False] * 50)})
-        )
-        result_df = flag_check(
-            test_df, prefix="FLAG_", flags=None, mode="master", summary=False
-        )
-        intended_df1 = spark.createDataFrame(
-            pd.DataFrame(
-                {
-                    "FLAG_1": ([True] * 50),
-                    "flag_count": [1] * 50,
-                    "FAIL": [True] * 50,
-                }
-            )
-        )
-        intended_df2 = spark.createDataFrame(
-            pd.DataFrame(
-                {
-                    "FLAG_1": ([False] * 50),
-                    "flag_count": [0] * 50,
-                    "FAIL": [False] * 50,
-                }
-            )
-        )
-        intended_df = intended_df1.union(intended_df2)
-        assertDataFrameEqual(result_df, intended_df, ignoreColumnOrder=True)
-
-    def test_expected_2(self, spark: SparkSession) -> None:
-        test_df = spark.createDataFrame(
-            pd.DataFrame({"FLAG_1": ([True] * 50) + ([False] * 50)})
-        )
-        result_df = flag_check(
-            test_df,
-            prefix="FLAG_",
-            flags=None,
-            mode="pass",
-            summary=False,
-        )
-        intended_df = spark.createDataFrame(
-            pd.DataFrame(
-                {
-                    "FLAG_1": ([False] * 50),
-                    "flag_count": [0] * 50,
-                    "FAIL": [False] * 50,
-                }
-            )
-        )
-        assertDataFrameEqual(result_df, intended_df, ignoreColumnOrder=True)
-
-    def test_expected_3(self, spark: SparkSession) -> None:
-        test_df = spark.createDataFrame(
-            pd.DataFrame({"FLAG_1": ([True] * 50) + ([False] * 50)})
-        )
-        result_df = flag_check(
-            test_df, prefix="FLAG_", flags=None, mode="fail", summary=False
-        )
-        intended_df = spark.createDataFrame(
-            pd.DataFrame(
-                {
-                    "FLAG_1": ([True] * 50),
-                    "flag_count": [1] * 50,
-                    "FAIL": [True] * 50,
-                }
-            )
-        )
-        assertDataFrameEqual(result_df, intended_df, ignoreColumnOrder=True)
-
-    def test_expected_4(self, spark: SparkSession) -> None:
-        test_df = spark.createDataFrame(
-            pd.DataFrame({"FLAG_1": [True] * 50 + [False] * 50})
-        )
-        result_df2 = flag_check(
-            test_df, prefix="FLAG_", flags=None, mode="split", summary=False
-        )[1]
-        intended_df = spark.createDataFrame(
-            pd.DataFrame(
-                {
-                    "FLAG_1": ([True] * 50),
-                    "flag_count": [1] * 50,
-                    "FAIL": [True] * 50,
-                }
-            )
-        )
-        assertDataFrameEqual(result_df2, intended_df, ignoreColumnOrder=True)
-
-    def test_expected_5(self, spark: SparkSession) -> None:
-        test_df = spark.createDataFrame(
-            pd.DataFrame({"FLAG_1": [True] * 50 + [False] * 50})
-        )
-        result_df1, result_df2 = flag_check(
-            test_df, prefix="FLAG_", flags=None, mode="master", summary=True
-        )
-        intended_df1 = spark.createDataFrame(
-            pd.concat(
-                [
-                    pd.DataFrame(
-                        {
-                            "FLAG_1": [True] * 50,
-                            "flag_count": [1] * 50,
-                            "FAIL": [True] * 50,
-                        }
-                    ),
-                    pd.DataFrame(
-                        {
-                            "FLAG_1": [False] * 50,
-                            "flag_count": [0] * 50,
-                            "FAIL": [False] * 50,
-                        }
-                    ),
-                ]
-            )
-        )
-        intended_df2 = spark.createDataFrame(
-            pd.DataFrame(
-                {
-                    "flag": ["FLAG_1", "FAIL"],
-                    "true": [50] * 2,
-                    "false": [50] * 2,
-                    "rows": [100] * 2,
-                    "percent_true": [50.0] * 2,
-                    "percent_false": [50.0] * 2,
-                }
-            )
-        )
-        assertDataFrameEqual(result_df1, intended_df1, ignoreColumnOrder=True)
-        assertDataFrameEqual(result_df2, intended_df2, ignoreColumnOrder=True)
-
-    def test_expected_6(self, spark: SparkSession) -> None:
-        pretest_df_orig = spark.createDataFrame(
-            pd.DataFrame({"FLAG_1": [True] * 50 + [False] * 50})
-        )
-        pretest_df2 = flag_check(
-            pretest_df_orig, prefix="FLAG_", flags=None, mode="master", summary=True
-        )[1]
-        test_df = (
-            pretest_df2.toPandas()
-            == spark.createDataFrame(
-                [
-                    ("FLAG_1", 50, 50, 100, 50.0, 50.0),
-                    ("FAIL", 50, 50, 100, 50.0, 50.0),
-                ],
-                ["flag", "true", "false", "rows", "percent_true", "percent_false"],
-            ).toPandas()
-        )
-        result_df = spark.createDataFrame(test_df)
-        intended_df = spark.createDataFrame(
-            pd.DataFrame(
-                {
-                    "flag": [True] * 2,
-                    "true": [True] * 2,
-                    "false": [True] * 2,
-                    "rows": [True] * 2,
-                    "percent_true": [True] * 2,
-                    "percent_false": [True] * 2,
-                }
-            )
-        )
-        assertDataFrameEqual(result_df, intended_df, ignoreColumnOrder=True)

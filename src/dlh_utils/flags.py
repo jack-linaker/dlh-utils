@@ -68,47 +68,35 @@ def flag(
 
     Examples
     --------
+    >>> data = [("alice", 25), ("bob", 42), ("steve", None)]
+    >>> df = spark.createDataFrame(data, schema=["name", "age"])
     >>> df.show()
-    +---+--------+-----------+-------+----------+---+--------+
-    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|
-    +---+--------+-----------+-------+----------+---+--------+
-    |  1|   Homer|        Jay|Simpson|1983-05-12|  M|ET74 2SP|
-    |  2|   Marge|     Juliet|Simpson|1983-03-19|  F|ET74 2SP|
-    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
-    |  4|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|
-    |  5|  Maggie|       null|Simpson|2021-01-12|  F|ET74 2SP|
-    +---+--------+-----------+-------+----------+---+--------+
-    >>> flag(
-    ...     df,
-    ...     ref_col="Middle_name",
-    ...     condition="isNotNull",
-    ...     condition_value=None,
-    ...     condition_col=None,
-    ...     alias=None,
-    ...     prefix="FLAG",
-    ...     fill_null=None,
-    ... ).show()
-    +---+--------+-----------+-------+----------+---+--------+------------------------+
-    | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|FLAG_Middle_nameisNotNull|
-    +---+--------+-----------+-------+----------+---+--------+------------------------+
-    |  1|   Homer|        Jay|Simpson|1983-05-12|  M|ET74 2SP|                    true|
-    |  2|   Marge|     Juliet|Simpson|1983-03-19|  F|ET74 2SP|                    true|
-    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|                    true|
-    |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|                    true|
-    |  4|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|                    true|
-    |  5|  Maggie|       null|Simpson|2021-01-12|  F|ET74 2SP|                   false|
-    +---+--------+-----------+-------+----------+---+--------+------------------------+
+    +-----+----+
+    | name| age|
+    +-----+----+
+    |alice|  25|
+    |  bob|  42|
+    |steve|NULL|
+    +-----+----+
+
+    >>> flag(df, ref_col="age", condition="isNotNull").show()
+    +-----+----+------------------+
+    | name| age|FLAG_age_isNotNull|
+    +-----+----+------------------+
+    |alice|  25|              true|
+    |  bob|  42|              true|
+    |steve|NULL|             false|
+    +-----+----+------------------+
     """
     if alias is None and condition_value is not None:
         alias_value = str(condition_value)
-        alias = f"{prefix}_{ref_col}{condition}{alias_value}"
+        alias = f"{prefix}_{ref_col}_{condition}_{alias_value}"
 
     if alias is None and condition_col is not None:
-        alias = f"{prefix}_{ref_col}{condition}_{condition_col}"
+        alias = f"{prefix}_{ref_col}_{condition}_{condition_col}"
 
     if alias is None and condition_col is None and condition_value is None:
-        alias = f"{prefix}_{ref_col}{condition}"
+        alias = f"{prefix}_{ref_col}_{condition}"
 
     if condition == "==" and condition_col is not None:
         df = df.withColumn(alias, sf.col(ref_col) == sf.col(condition_col))
@@ -179,16 +167,16 @@ def flag_check(
     | tuple[DataFrame, DataFrame | pd.DataFrame]
     | tuple[DataFrame, DataFrame, DataFrame | pd.DataFrame]
 ):
-    """Read flag columns and counts True/False values.
+    """Read flag columns and counts true/false values.
 
-    Adds flag count column (counting TRUE/Fail values) and overall fail
-    column (TRUE/FALSE and flag TRUE/Fail). If any rows in the flag
-    count column are greater than 0, the overall fail value for this row
-    will be True so this is quickly highlighted to the user.
+    Adds flag count column (counting true/false values) and overall FAIL
+    column (true/false and flag true/false). If any rows in the flag
+    count column are greater than 0, the overall FAIL value for this row
+    will be true so this is quickly highlighted to the user.
 
     Option to produce flag summary stats employing `flag_summary`.
     Option to return full DataFrame, only passes, only fails, or passes
-    and fails(residuals) as two separate dataframes.
+    and fails (residuals) as two separate dataframes.
 
     Parameters
     ----------
@@ -213,38 +201,42 @@ def flag_check(
 
     Returns
     -------
-    pyspark.sql.DataFrame | tuple[pyspark.sql.DataFrame,
-    pyspark.sql.DataFrame | pandas.DataFrame] |
-    tuple[pyspark.sql.DataFrame, pyspark.sql.DataFrame,
-    pyspark.sql.DataFrame | pandas.DataFrame]
+    pyspark.sql.DataFrame | tuple[pyspark.sql.DataFrame, pyspark.sql.DataFrame | pandas.DataFrame] | tuple[pyspark.sql.DataFrame, pyspark.sql.DataFrame, pyspark.sql.DataFrame | pandas.DataFrame]
         Returns DataFrame with results depending on the mode argument.
         If the mode argument is set to split, it will return two
         DataFrames.
 
     Examples
     --------
+    >>> from dlh_utils.flags import flag
+    >>> data = [("alice", 25), ("bob", 42), ("steve", None)]
+    >>> df = spark.createDataFrame(data, schema=["name", "age"])
     >>> df.show()
-    +---+--------+-----------+-------+---+-------------------------+
-    | ID|Forename|Middle_name|Surname|Sex|FLAG_Middle_nameisNotNull|
-    +---+--------+-----------+-------+---+-------------------------+
-    |  1|   Homer|        Jay|Simpson|  M|                     true|
-    |  2|   Marge|     Juliet|Simpson|  F|                     true|
-    |  3|    Bart|      Jo-Jo|Simpson|  M|                     true|
-    |  3|    Bart|      Jo-Jo|Simpson|  M|                     true|
-    |  4|    Lisa|      Marie|Simpson|  F|                     true|
-    |  5|  Maggie|       null|Simpson|  F|                    false|
-    +---+--------+-----------+-------+---+-------------------------+
-    >>> flag_check(df, prefix="FLAG_", flags=None, mode="master", summary=False).show()
-    +---+--------+-----------+-------+---+-------------------------+----------+-----+
-    | ID|Forename|Middle_name|Surname|Sex|FLAG_Middle_nameisNotNull|flag_count| FAIL|
-    +---+--------+-----------+-------+---+-------------------------+----------+-----+
-    |  1|   Homer|        Jay|Simpson|  M|                     true|         1| true|
-    |  2|   Marge|     Juliet|Simpson|  F|                     true|         1| true|
-    |  3|    Bart|      Jo-Jo|Simpson|  M|                     true|         1| true|
-    |  3|    Bart|      Jo-Jo|Simpson|  M|                     true|         1| true|
-    |  4|    Lisa|      Marie|Simpson|  F|                     true|         1| true|
-    |  5|  Maggie|       null|Simpson|  F|                    false|         0|false|
-    +---+--------+-----------+-------+---+-------------------------+----------+-----+
+    +-----+----+
+    | name| age|
+    +-----+----+
+    |alice|  25|
+    |  bob|  42|
+    |steve|NULL|
+    +-----+----+
+    >>> flagged = flag(df, ref_col="age", condition="isNotNull")
+    >>> flagged.show()
+    +-----+----+------------------+
+    | name| age|FLAG_age_isNotNull|
+    +-----+----+------------------+
+    |alice|  25|              true|
+    |  bob|  42|              true|
+    |steve|NULL|             false|
+    +-----+----+------------------+
+
+    >>> flag_check(flagged).show()
+    +-----+----+------------------+----------+-----+
+    | name| age|FLAG_age_isNotNull|flag_count| FAIL|
+    +-----+----+------------------+----------+-----+
+    |alice|  25|              true|         1| true|
+    |  bob|  42|              true|         1| true|
+    |steve|NULL|             false|         0|false|
+    +-----+----+------------------+----------+-----+
 
     See Also
     --------
@@ -257,62 +249,35 @@ def flag_check(
     """
     if flags is None:
         flags = [column for column in df.columns if column.startswith(prefix)]
+    if not flags:
+        error_message = "No flag columns found. Provide `flags` or adjust `prefix`."
+        raise ValueError(error_message)
 
-    if len(flags) == 0:
-        print(
-            "No flag columns found! Please specify which flag column to summarise with"
-            "the flags = argument, or specify the correct prefix"
-        )
+    flag_cols = [sf.col(flag).cast("long") for flag in flags]
+    flag_count = sum((col for col in flag_cols), sf.lit(0).cast("long"))
+    df = df.withColumn("flag_count", flag_count)
+    df = df.withColumn("FAIL", sf.col("flag_count") > 0)
 
-    df = df.withColumn("flag_count", sf.lit(0))
-
-    for flag in flags:
-        df = df.withColumn(
-            "flag_count",
-            sf.when(sf.col(flag), sf.col("flag_count") + sf.lit(1)).otherwise(
-                sf.col("flag_count")
-            ),
-        )
-
-    df = df.withColumn(
-        "FAIL", reduce(add, [sf.col(flag).cast(IntegerType()) for flag in flags])
-    )
-    df = df.withColumn("FAIL", sf.col("FAIL") > 0)
-
-    if summary is True:
+    if summary:
         summary_df = flag_summary(df, [*flags, "FAIL"], pandas=False)
-
-        if mode == "master":
-            return (df, summary_df)
-
         if mode == "split":
-            return (
-                (df.where(sf.col("FAIL") == sf.lit(col=False))),
-                (df.where(sf.col("FAIL") == sf.lit(col=True))),
-                summary_df,
-            )
-
+            passes = df.filter(~sf.col("FAIL"))
+            fails = df.filter(sf.col("FAIL"))
+            return passes, fails, summary_df
         if mode == "pass":
-            return (df.where(sf.col("FAIL") == sf.lit(col=False)), summary_df)
-
+            return df.filter(~sf.col("FAIL")), summary_df
         if mode == "fail":
-            return (df.where(sf.col("FAIL") == sf.lit(col=True)), summary_df)
+            return df.filter(sf.col("FAIL")), summary_df
+        return df, summary_df
 
-    else:
-        if mode == "master":
-            return df
-
-        if mode == "split":
-            return (
-                (df.where(sf.col("FAIL") == sf.lit(col=False))),
-                (df.where(sf.col("FAIL") == sf.lit(col=True))),
-            )
-
-        if mode == "pass":
-            return df.where(sf.col("FAIL") == sf.lit(col=False))
-
-        if mode == "fail":
-            return df.where(sf.col("FAIL") == sf.lit(col=True))
+    if mode == "split":
+        passes = df.filter(~sf.col("FAIL"))
+        fails = df.filter(sf.col("FAIL"))
+        return passes, fails
+    if mode == "pass":
+        return df.filter(~sf.col("FAIL"))
+    if mode == "fail":
+        return df.filter(sf.col("FAIL"))
 
     return df
 
