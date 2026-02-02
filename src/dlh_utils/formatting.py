@@ -7,6 +7,7 @@ These wrap up some commonly-needed Pandas Styler and openpyxl boilerplate code.
 import os
 import subprocess
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import openpyxl
@@ -145,10 +146,10 @@ def export_to_excel(
     | list[DataFrame | pd.DataFrame]
     | DataFrame
     | pd.DataFrame,
+    local_path: str,
     styles: dict[Any, Any] | None = None,
     columns: list[str] | dict[str, list[str]] | None = None,
     freeze_panes: dict[str, tuple[int, int]] | None = None,
-    local_path: str | None = None,
     hdfs_path: str | None = None,
 ):
     """Create Excel workbook with one worksheet per provided DataFrame.
@@ -165,10 +166,13 @@ def export_to_excel(
         etc. If PySpark DataFrames are provided they will be converted
         to Pandas. A single DataFrame can also be passed for this
         argument.
+    local_path : str
+        The full path (including filename) where the Excel workbook will
+        be saved. If not specified, the workbook will not be saved to
+        disk.
     styles : optional
-        A dictionary to pass to `apply_excel_styles`. See the
-        documentation for that function for more information. Defaults
-        to None.
+        A dictionary to pass to `apply_styles`. See the documentation
+        for that function for more information. Defaults to None.
     columns : optional
         A dictionary whose keys are DataFrame names and whose values are
         lists of columns. If a DataFrame is named in this dictionary,
@@ -177,18 +181,14 @@ def export_to_excel(
         this dictionary, all of its columns will be included in their
         default order. Defaults to None.
     freeze_panes : optional
-        Dictionary mapping table names to tuples of the form (r, c)
+        A dictionary mapping table names to tuples of the form (r, c)
         where r is the number of rows from the top to freeze and c the
         number of columns on the left. If a table's name is not present
         as a key, nothing will be frozen. Defaults to None.
-    local_path : str, optional
-        Full path (including filename) where the Excel workbook will be
-        saved. If not specified, the workbook will not be saved to disk.
-        Defaults to None.
     hdfs_path : str, optional
-        Full HDFS path (including filename) where the Excel workbook
+        The full HDFS path (including filename) where the Excel workbook
         will be saved. If you specify this, you must also provide a
-        local_path. Defaults to None.
+        `local_path`. Defaults to None.
 
     Returns
     -------
@@ -197,7 +197,7 @@ def export_to_excel(
     Examples
     --------
     Write two DataFrames to named sheets, selecting only two columns
-    from people_df:
+    from `people_df`:
 
     >>> export_to_excel(
     ...     {"People": people_df, "Places": places_df},
@@ -232,16 +232,19 @@ def export_to_excel(
     ...     },
     ... )
     """
-    if hdfs_path is not None and local_path is None:
-        error_message = "Can't save to HDFS without also specifying a local path"
-        raise ValueError(error_message)
-    if columns is None:
-        columns = {}
-    if isinstance(dataframes, list):
-        dataframes = {"Sheet" + str(i): df for i, df in enumerate(dataframes)}
-    elif isinstance(dataframes, pd.DataFrame):
+    # Normalise `dataframes` into an ordered mapping: sheet_name ->
+    # pandas.DataFrame.
+    if isinstance(dataframes, pd.DataFrame):
+        dataframes = {"Sheet1": dataframes}
+    elif isinstance(dataframes, list):
+        # Name sheets Sheet1, Sheet2 etc.
+        dataframes = {f"Sheet{i}": df for i, df in enumerate(dataframes, start=1)}
+    elif not isinstance(dataframes, dict):
+        # Last resort: try to treat as a single df-like object.
         dataframes = {"Sheet1": dataframes}
 
+    # If `columns` is provided as a `list` but the user passed a single
+    # sheet mapping, associate the list with that single sheet's name.
     if isinstance(columns, list):
         if len(dataframes) > 1:
             error_message = (
@@ -250,45 +253,76 @@ def export_to_excel(
                 "function's docstring for an example)."
             )
             raise ValueError(error_message)
-        columns = {"Sheet1": columns}
+        only_sheet = next(iter(dataframes.keys()))
+        columns = {only_sheet: columns}
 
-    # Set up the workbook.
-    wb = openpyxl.Workbook()
-    wb.save(local_path)
-    for df_name in dataframes:
-        wb.create_sheet(df_name)
+    columns = columns or {}
+    styles = styles or {}
+    freeze_panes = freeze_panes or {}
 
-    # Create a writer to export the DataFrames.
-    writer = pd.ExcelWriter(local_path, mode="w", engine="openpyxl")
-    writer.book = wb
-    writer.sheets = dict((ws.title, ws) for ws in wb.worksheets)
+    # Ensure the directory exists.
+    Path.mkdir(Path(local_path).parent, parents=True, exist_ok=True)
 
-    # Export each DataFrame to its own sheet.
-    for df_name in dataframes:
-        if not isinstance(dataframes[df_name], pd.DataFrame):
-            dataframes[df_name] = dataframes[df_name].toPandas()
-        if df_name in columns:
-            dataframes[df_name] = dataframes[df_name].loc[:, columns[df_name]]
-        if styles is not None and df_name in styles:
-            df_export = apply_styles(dataframes[df_name], styles[df_name])
-        else:
-            df_export = dataframes[df_name]
-        fp = None
-        if freeze_panes is not None and df_name in freeze_panes:
-            fp = freeze_panes[df_name]
-        df_export.to_excel(writer, sheet_name=df_name, index=False, freeze_panes=fp)
+    # Use `ExcelWriter` as a context manager (ensures write is closed
+    # and file saved).
+    with pd.ExcelWriter(local_path, engine="openpyxl", mode="w") as writer:
+        # Iterate sheets in the user-specified order.
+        for sheet_name, df_like in dataframes.items():
+            # Convert Spark DataFrames.
+            if not isinstance(df_like, pd.DataFrame):
+                if hasattr(df_like, "toPandas"):
+                    df = df_like.toPandas()
+                else:
+                    df = pd.DataFrame(df_like)
+            else:
+                df = df_like
 
-    # Remove the default, empty sheet if it wasn't used.
-    if "Sheet" not in dataframes:
-        del wb["Sheet"]
+            # Subset columns if requested for this sheet.
+            if sheet_name in columns:
+                df = df.loc[:, columns[sheet_name]]
 
-    # Save to disk.
-    if local_path is not None:
-        wb.save(local_path)
-        if hdfs_path is not None:
-            copy_local_file_to_hdfs(local_path, hdfs_path)
+            # Default: nothing to write yet.
+            df_to_write = None
 
-    return wb
+            # Apply styles if provided for this sheet.
+            if sheet_name in styles:
+                # Expect `styles[sheet_name]` to be a `dict` for
+                # `apply_styles`.
+                style_or_df = apply_styles(df, styles[sheet_name])
+                # `apply_styles` is expected to return `pandas.Styler`.
+                if not isinstance(style_or_df, Styler):
+                    # Fallback: treat as DataFrame.
+                    df_to_write = style_or_df
+                else:
+                    # Write Styler to excel.
+                    style_or_df.to_excel(writer, sheet_name=sheet_name, index=False)
+            else:
+                df_to_write = df
+
+            if df_to_write is not None:
+                df_to_write.to_excel(writer, sheet_name=sheet_name, index=False)
+
+            # Ensure the worksheet object is available for tweaks
+            # (freeze_panes etc).
+            ws = writer.book[sheet_name]
+
+            # Apply freeze panes if requested.
+            if sheet_name in freeze_panes:
+                r, c = freeze_panes[sheet_name]
+                # `openpyxl` expects the first unfrozen cell; we set via
+                # a cell object and freeze r rows and c columns => first
+                # unfrozen is (r+1, c+1).
+                ws.freeze_panes = ws.cell(row=r + 1, column=c + 1)
+
+        # Remove default sheet if present and not requested.
+        if "Sheet" in writer.book.sheetnames and "Sheet" not in dataframes:
+            del writer.book["Sheet"]
+
+    # Optionally copy to HDFS.
+    if hdfs_path is not None:
+        copy_local_file_to_hdfs(local_path, hdfs_path)
+
+    return openpyxl.load_workbook(local_path)
 
 
 def style_colour_gradient(

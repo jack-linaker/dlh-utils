@@ -1,4 +1,5 @@
 from functools import partial
+from pathlib import Path
 
 import pandas as pd
 
@@ -108,7 +109,7 @@ class TestApplyStyles:
 
 
 class TestExportToExcel:
-    def test_export_one_sheet_df_no_formatting(self) -> None:
+    def test_export_one_sheet_df_no_formatting(self, tmp_path: Path) -> None:
         df = pd.DataFrame(
             {
                 "firstname": ["Alan", "Claire", "Josh", "Bob"],
@@ -117,7 +118,8 @@ class TestExportToExcel:
                 "numeric_B": [-500, 221, 1, 0],
             }
         )
-        wb = export_to_excel({"Sheet1": df}, local_path="/tmp/pytest.xlsx")
+        out_file = tmp_path / "test.xlsx"
+        wb = export_to_excel({"Sheet1": df}, local_path=str(out_file))
         assert len(wb.worksheets) == 1
         for i, c in enumerate(df.columns):
             assert (wb["Sheet1"].cell(1, i + 1).value) == c
@@ -127,7 +129,7 @@ class TestExportToExcel:
                 b = df.loc[row_num, c]
                 assert a == b
 
-    def test_export_list_of_columns_one_sheet_df(self) -> None:
+    def test_export_list_of_columns_one_sheet_df(self, tmp_path: Path) -> None:
         df = pd.DataFrame(
             {
                 "firstname": ["Alan", "Claire", "Josh", "Bob"],
@@ -136,10 +138,9 @@ class TestExportToExcel:
                 "numeric_B": [-500, 221, 1, 0],
             }
         )
+        out_file = tmp_path / "test.xlsx"
         wb = export_to_excel(
-            {"Sheet1": df},
-            columns=["firstname", "numeric_A"],
-            local_path="/tmp/pytest.xlsx",
+            {"Sheet1": df}, columns=["firstname", "numeric_A"], local_path=str(out_file)
         )
         assert len(wb.worksheets) == 1
         for i, c in enumerate(["firstname", "numeric_A"]):
@@ -150,7 +151,7 @@ class TestExportToExcel:
                 b = df.loc[row_num, c]
                 assert a == b
 
-    def test_export_two_dfs_two_sheets(self) -> None:
+    def test_export_two_dfs_two_sheets(self, tmp_path: Path) -> None:
         df_a = pd.DataFrame(
             {
                 "firstname": ["Alan", "Claire", "Josh", "Bob"],
@@ -167,8 +168,9 @@ class TestExportToExcel:
                 "numeric_B": [91, 92, 93, 94],
             }
         )
+        out_file = tmp_path / "test.xlsx"
         wb = export_to_excel(
-            {"Dataframe A": df_a, "Dataframe B": df_b}, local_path="/tmp/pytest.xlsx"
+            {"Dataframe A": df_a, "Dataframe B": df_b}, local_path=str(out_file)
         )
         expected_number_of_sheets = 2
         assert len(wb.worksheets) == expected_number_of_sheets
@@ -187,7 +189,7 @@ class TestExportToExcel:
                 b = df_b.loc[row_num, c]
                 assert a == b
 
-    def test_export_one_sheet_df_specify_columns(self) -> None:
+    def test_export_one_sheet_df_specify_columns(self, tmp_path: Path) -> None:
         df = pd.DataFrame(
             {
                 "firstname": ["Anne", "Betty", "Carlo", "Daphne"],
@@ -197,9 +199,10 @@ class TestExportToExcel:
             }
         )
         column_list = ["numeric_B", "lastname"]
+        out_file = tmp_path / "test.xlsx"
         wb = export_to_excel(
             {"Dataframe C": df},
-            local_path="/tmp/pytest.xlsx",
+            local_path=str(out_file),
             columns={"Dataframe C": column_list},
         )
         assert len(wb.worksheets) == 1
@@ -211,7 +214,7 @@ class TestExportToExcel:
                 b = df.loc[row_num, c]
                 assert a == b
 
-    def test_export_one_sheet_df_with_basic_formatting(self) -> None:
+    def test_export_one_sheet_df_with_basic_formatting(self, tmp_path: Path) -> None:
         df = pd.DataFrame(
             {
                 "firstname": ["Anne", "Betty", "Carlo", "Daphne"],
@@ -220,9 +223,10 @@ class TestExportToExcel:
                 "numeric_B": [91, 92, 93, 94],
             }
         )
+        out_file = tmp_path / "test.xlsx"
         wb = export_to_excel(
             {"Dataframe D": df},
-            local_path="/tmp/pytest.xlsx",
+            local_path=str(out_file),
             styles={"Dataframe D": {style_on_cutoff: "numeric_A"}},
         )
         assert len(wb.worksheets) == 1
