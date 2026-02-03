@@ -199,16 +199,7 @@ class TestClericalSample:
             pd.DataFrame(
                 {
                     "l_id": ["1", "2", "3", "4", "5", "6", "7", "8"],
-                    "l_first_name": [
-                        "aa",
-                        None,
-                        "ab",
-                        "bb",
-                        "aa",
-                        "ax",
-                        "cr",
-                        "cd",
-                    ],
+                    "l_first_name": ["aa", None, "ab", "bb", "aa", "ax", "cr", "cd"],
                     "l_last_name": ["fr", "gr", None, "ga", "gx", "mx", "ra", "ga"],
                 }
             )
@@ -217,16 +208,7 @@ class TestClericalSample:
             pd.DataFrame(
                 {
                     "r_id": ["1", "2", "3", "4", "5", "6", "7", "8"],
-                    "r_first_name": [
-                        "ax",
-                        None,
-                        "ad",
-                        "bd",
-                        "ar",
-                        "ax",
-                        "cr",
-                        "cd",
-                    ],
+                    "r_first_name": ["ax", None, "ad", "bd", "ar", "ax", "cr", "cd"],
                     "r_last_name": ["fr", "gr", "fa", "ga", "gx", "mx", "ra", None],
                 }
             )
@@ -271,10 +253,10 @@ class TestClusterNumber:
         make sure you have both graphframes and graphframes_wrapper installed
         via pip3.
         """
-        test_schema = StructType(
+        input_schema = StructType(
             [StructField("id1", StringType()), StructField("id2", StringType())]
         )
-        test_data = [
+        input_data = [
             ["1a", "2b"],
             ["3a", "3b"],
             ["2a", "1b"],
@@ -282,17 +264,15 @@ class TestClusterNumber:
             ["1a", "8b"],
             ["2a", "9b"],
         ]
-        df = spark.createDataFrame(test_data, test_schema)
-        result_df = cluster_number(df, id_1="id1", id_2="id2")
-        assert result_df is not None
-        intended_schema = StructType(
+        input_df = spark.createDataFrame(input_data, input_schema)
+        expected_schema = StructType(
             [
                 StructField("id1", StringType()),
                 StructField("id2", StringType()),
                 StructField("Cluster_Number", IntegerType()),
             ]
         )
-        intended_data: list[list[str | int]] = [
+        expected_data: list[list[str | int]] = [
             ["2a", "1b", 1],
             ["2a", "9b", 1],
             ["3a", "3b", 2],
@@ -300,8 +280,10 @@ class TestClusterNumber:
             ["1a", "8b", 3],
             ["1a", "2b", 3],
         ]
-        intended_df = spark.createDataFrame(intended_data, intended_schema)
-        assertDataFrameEqual(intended_df, result_df)
+        expected_output = spark.createDataFrame(expected_data, expected_schema)
+        actual_output = cluster_number(input_df, id_1="id1", id_2="id2")
+        assert actual_output is not None
+        assertDataFrameEqual(actual_output, expected_output)
 
 
 class TestDeterministicLinkage:

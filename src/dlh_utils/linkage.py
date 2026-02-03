@@ -1,8 +1,11 @@
 """Functions used within the linkage phase of data linkage projects."""
 
+import getpass
 import os
 import re
+import tempfile
 from difflib import SequenceMatcher
+from pathlib import Path
 from typing import Any
 
 import jellyfish
@@ -275,11 +278,11 @@ def clerical_sample(
     )
 
 
-def cluster_number(df: DataFrame, id_1: str, id_2: str) -> DataFrame | None:
+def cluster_number(df: DataFrame, id_1: str, id_2: str) -> DataFrame:
     """Assign cluster numbers based on linked ID pairs.
 
-    Takes DataFrame of matches with two id columns (id_1 and id_2) and
-    assigns a cluster number to the dataframe based on the unique id
+    Takes DataFrame of matches with two ID columns (`id_1` and `id_2`)
+    and assigns a cluster number to the dataframe based on the unique ID
     pairings.
 
     PLEASE NOTE: this function relies on a SparkSession that has been
@@ -290,30 +293,30 @@ def cluster_number(df: DataFrame, id_1: str, id_2: str) -> DataFrame | None:
     java.lang.ClassNotFoundException:
     org.graphframes.GraphFramePythonAPI
 
-    This can either be fixed by starting a SparkSession from the
+    This can either be fixed by starting a `SparkSession` from the
     `sessions` module of this package, or by adding the JAR files from
-    within the graphframes-wrapper package to your spark session, by
-    setting the "spark.jars" spark config parameter equal to the path to
-    these JAR files.
+    within the `graphframes-wrapper` package to your Spark session, by
+    setting the `"spark.jars"` Spark config parameter equal to the path
+    to these JAR files.
 
     Parameters
     ----------
     df : pyspark.sql.DataFrame
-        DataFrame to add new column 'Cluster_Number' to.
+        A DataFrame to add new column 'Cluster_Number' to.
     id_1 : str
-        ID column of first DataFrame.
+        An ID column from the first DataFrame.
     id_2 : str
-        ID column of second DataFrame.
+        An ID column from the second DataFrame.
 
     Raises
     ------
     TypeError
-        If variables "id_1" or "id_2" are not strings.
+        If `id_1` or `id_2` columns are not `StringType`.
 
     Returns
     -------
-    df : pyspark.sql.DataFrame
-        DataFrame with cluster number.
+    pyspark.sql.DataFrame
+        The input DataFrame `df` with a column "Cluster_Number".
 
     Examples
     --------
@@ -328,6 +331,7 @@ def cluster_number(df: DataFrame, id_1: str, id_2: str) -> DataFrame | None:
     | 1a| 8b|
     | 2a| 9b|
     +---+---+
+
     >>> cluster_number(df=df, id_1="id1", id_2="id2").show()
     +---+---+--------------+
     |id1|id2|Cluster_Number|
@@ -345,14 +349,21 @@ def cluster_number(df: DataFrame, id_1: str, id_2: str) -> DataFrame | None:
         (isinstance(df.schema[id_1].dataType, StringType))
         and (isinstance(df.schema[id_2].dataType, StringType))
     ):
-        error_message = "ID variables must be strings"
+        error_message = (
+            f"ID columns must be strings. Got types id_1={df.schema[id_1].dataType} "
+            f"and id_2={df.schema[id_2].dataType}"
+        )
         raise TypeError(error_message)
 
-    # Set up spark checkpoint settings.
-    spark = SparkSession.builder.getOrCreate()
-    username = os.getenv("HADOOP_USER_NAME")
-    checkpoint_path = f"/user/{username}/checkpoints"
-    spark.sparkContext.setCheckpointDir(checkpoint_path)
+    # Set up Spark checkpoint settings.
+    spark = df.sparkSession
+    spark_context = spark.sparkContext
+    spark_conf = spark_context.getConf()
+    spark_master = spark_conf.get("spark.master", spark_context.master or "").lower()
+    if not spark_master.startswith("local"):
+        username = os.getenv("HADOOP_USER_NAME")
+        checkpoint_path = f"/user/{username}/checkpoints"
+        spark_context.setCheckpointDir(checkpoint_path)
 
     # Stack all unique IDs datasets into one column called 'id'.
     ids = df.select(id_1).union(df.select(id_2))
@@ -368,38 +379,36 @@ def cluster_number(df: DataFrame, id_1: str, id_2: str) -> DataFrame | None:
     # Create graph & get connected components / clusters.
     try:
         graph = GraphFrame(ids, matches)
-
-        cluster = graph.connectedComponents()
-
-        # Update cluster numbers to be consecutive (1,2,3,4,... instead
-        # of 1,2,3,1000,1001...).
-        lookup = (
-            cluster.select("component")
-            .dropDuplicates(["component"])
-            .withColumn("Cluster_Number", sf.rank().over(Window.orderBy("component")))
-            .sort("component")
+    except Py4JJavaError as e:
+        error_message = (
+            "WARNING: A graphframes wrapper package installation has not been found! "
+            "If you have not already done so, you will need to submit graphframes' JAR"
+            " file dependency to your spark context. This can be found here:\n\n"
+            "https://repos.spark-packages.org/graphframes/graphframes/0.6.0-spark2.3-s_2.11/graphframes-0.6.0-spark2.3-s_2.11.jar"
+            "\n\nOnce downloaded, this can be submitted to your spark context via:\n\n"
+            "spark.conf.set('spark.jars', path_to_jar_file)\n\n or by starting a "
+            "SparkSession from the sessions module of dlh_utils."
         )
-        cluster = cluster.join(lookup, on="component", how="left").withColumnRenamed(
-            "id", id_1
-        )
+        raise RuntimeError(error_message) from e
 
-        # Join new cluster number onto matched pairs.
-        return (
-            df.join(cluster, on=id_1, how="left")
-            .sort("Cluster_Number")
-            .drop("component")
-        )
+    cluster = graph.connectedComponents()
 
-    except Py4JJavaError:
-        print("""WARNING: A graphframes wrapper package installation has not been found!
-        If you have not already done so, you will need to submit graphframes' JAR file
-        dependency to your spark context. This can be found here:
-        \nhttps://repos.spark-packages.org/graphframes/graphframes/0.6.0-spark2.3-s_2.11/
-        graphframes-0.6.0-spark2.3-s_2.11.jar\nOnce downloaded,
-        this can be submitted to your spark context via:
-        spark.conf.set('spark.jars', path_to_jar_file) or by starting a
-        SparkSession from the sessions module of dlh_utils
-        """)
+    # Update cluster numbers to be consecutive (1,2,3,4,... instead
+    # of 1,2,3,1000,1001...).
+    lookup = (
+        cluster.select("component")
+        .dropDuplicates(["component"])
+        .withColumn("Cluster_Number", sf.rank().over(Window.orderBy("component")))
+        .sort("component")
+    )
+    cluster = cluster.join(lookup, on="component", how="left").withColumnRenamed(
+        "id", id_1
+    )
+
+    # Join new cluster number onto matched pairs.
+    return (
+        df.join(cluster, on=id_1, how="left").sort("Cluster_Number").drop("component")
+    )
 
 
 def deduplicate(
