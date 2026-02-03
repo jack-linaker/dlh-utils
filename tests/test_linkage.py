@@ -253,9 +253,6 @@ class TestClusterNumber:
         make sure you have both graphframes and graphframes_wrapper installed
         via pip3.
         """
-        input_schema = StructType(
-            [StructField("id1", StringType()), StructField("id2", StringType())]
-        )
         input_data = [
             ["1a", "2b"],
             ["3a", "3b"],
@@ -264,23 +261,18 @@ class TestClusterNumber:
             ["1a", "8b"],
             ["2a", "9b"],
         ]
-        input_df = spark.createDataFrame(input_data, input_schema)
-        expected_schema = StructType(
-            [
-                StructField("id1", StringType()),
-                StructField("id2", StringType()),
-                StructField("Cluster_Number", IntegerType()),
-            ]
-        )
+        input_df = spark.createDataFrame(input_data, schema=["id1", "id2"])
         expected_data: list[list[str | int]] = [
+            ["1a", "2b", 2],
+            ["1a", "8b", 2],
             ["2a", "1b", 1],
             ["2a", "9b", 1],
-            ["3a", "3b", 2],
-            ["3a", "7b", 2],
-            ["1a", "8b", 3],
-            ["1a", "2b", 3],
+            ["3a", "3b", 3],
+            ["3a", "7b", 3],
         ]
-        expected_output = spark.createDataFrame(expected_data, expected_schema)
+        expected_output = spark.createDataFrame(
+            expected_data, schema="id1: string, id2: string, Cluster_Number: int"
+        )
         actual_output = cluster_number(input_df, id_1="id1", id_2="id2")
         assert actual_output is not None
         assertDataFrameEqual(actual_output, expected_output)
