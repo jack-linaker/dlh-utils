@@ -764,6 +764,25 @@ class TestMatchkeyDataframe:
                 }
             )
         )
+        expected_data: list[list[int | str]] = [
+            [
+                1,
+                "[(first_name=first_name),(last_name=last_name),(uprn=uprn),"
+                "(date_of_birth=date_of_birth)]",
+            ],
+            [
+                2,
+                "[(substring(first_name,0,2)=substring(first_name,0,2)),"
+                "(substring(last_name,0,2)=substring(last_name,0,2)),"
+                "(uprn=uprn),(date_of_birth=date_of_birth)]",
+            ],
+        ]
+        expected_schema = StructType(
+            [
+                StructField("matchkey", LongType()),
+                StructField("description", StringType()),
+            ]
+        )
         mks = [
             [
                 df_l["first_name"] == df_r["first_name"],
@@ -780,28 +799,9 @@ class TestMatchkeyDataframe:
                 df_l["date_of_birth"] == df_r["date_of_birth"],
             ],
         ]
-        intended_schema = StructType(
-            [
-                StructField("matchkey", LongType()),
-                StructField("description", StringType()),
-            ]
-        )
-        intended_data: list[list[int | str]] = [
-            [
-                1,
-                "[(first_name=first_name),(last_name=last_name),(uprn=uprn),"
-                "(date_of_birth=date_of_birth)]",
-            ],
-            [
-                2,
-                "[(substring(first_name,0,2)=substring(first_name,0,2)),"
-                "(substring(last_name,0,2)=substring(last_name,0,2)),"
-                "(uprn=uprn),(date_of_birth=date_of_birth)]",
-            ],
-        ]
-        intended_df = spark.createDataFrame(intended_data, intended_schema)
-        result_df = matchkey_dataframe(mks)
-        assertDataFrameEqual(intended_df, result_df)
+        expected = spark.createDataFrame(expected_data, expected_schema)
+        actual = matchkey_dataframe(mks, spark)
+        assertDataFrameEqual(actual, expected)
 
 
 class TestMatchkeyJoin:

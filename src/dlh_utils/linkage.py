@@ -1,11 +1,8 @@
 """Functions used within the linkage phase of data linkage projects."""
 
-import getpass
 import os
 import re
-import tempfile
 from difflib import SequenceMatcher
-from pathlib import Path
 from typing import Any
 
 import jellyfish
@@ -574,8 +571,11 @@ def deterministic_linkage(
     left residual:  997186
     right residual:  7663
 
-    MATCHKEY 2 matches on matchkey:  384 total matches:  3199 left
-    residual:  996802 right residual:  7279
+    MATCHKEY 2
+    matches on matchkey:  384
+    total matches:  3199 left
+    residual:  996802
+    right residual:  7279
 
     >>> links.show()
     +--------------------+--------------------+--------+
@@ -921,7 +921,7 @@ def matchkey_counts(linked_df: DataFrame) -> DataFrame:
     return linked_df.groupBy("matchkey").count().sort("count", ascending=False)
 
 
-def matchkey_dataframe(mks: list[Any]) -> DataFrame:
+def matchkey_dataframe(mks: list[Any], spark: SparkSession) -> DataFrame:
     """Create DataFrame of matchkeys and descriptions.
 
     Takes a list of matchkeys. Assigns numbers to matchkeys based on
@@ -932,6 +932,8 @@ def matchkey_dataframe(mks: list[Any]) -> DataFrame:
     ----------
     mks : list
         List of matchkeys.
+    spark : pyspark.sql.SparkSession
+        An active SparkSession object.
 
     Returns
     -------
