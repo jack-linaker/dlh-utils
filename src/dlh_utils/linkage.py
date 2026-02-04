@@ -940,8 +940,6 @@ def matchkey_dataframe(mks: list[Any], spark: SparkSession) -> DataFrame:
     pyspark.sql.DataFrame
         DataFrame of matchkeys and descriptions.
     """
-    spark = SparkSession.builder.getOrCreate()
-
     return spark.createDataFrame(
         pd.DataFrame(
             {
