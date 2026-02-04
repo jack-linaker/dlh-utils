@@ -743,7 +743,7 @@ class TestMatchkeyCounts:
 
 
 class TestMatchkeyDataframe:
-    def test_expected(self, spark: SparkSession) -> None:
+    def test_creates_matchkey_descriptions_dataframe(self, spark: SparkSession) -> None:
         df_l = spark.createDataFrame(
             pd.DataFrame(
                 {

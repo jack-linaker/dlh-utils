@@ -940,22 +940,55 @@ def matchkey_dataframe(mks: list[Any], spark: SparkSession) -> DataFrame:
     pyspark.sql.DataFrame
         DataFrame of matchkeys and descriptions.
     """
-    return spark.createDataFrame(
-        pd.DataFrame(
-            {
-                "matchkey": [x for x, _y in enumerate(mks, 1)],
-                "description": [str(x) for x in mks],
-            }
-        )[["matchkey", "description"]]
-    ).withColumn(
-        "description",
-        sf.regexp_replace(
-            sf.col("description"),
-            "(?:Column[<]b['])|(?:['][>][,] \
-                 Column[<]b['])|(?:['][>])| ",
-            "",
-        ),
-    )
+    rows: list[tuple[int, str]] = []
+    for idx, mk in enumerate(mks, 1):
+        parts: list[str] = []
+        for col in mk:
+            s = str(col)
+            # Try to cut off leading "Column<" noise if present. Keep
+            # everything from the first "=" onward.
+            eq = s.find("=")
+            if eq != -1:
+                s = s[eq:]
+            s = s.strip()
+            # Drop a leading "=" if present
+            s = s.removeprefix("=")
+            # Remove stray angle/quote characters that sometimes wrap
+            # the repr.
+            s = re.sub(r"^[<']+", "", s)
+            s = re.sub(r"[>'\s]+$", "", s)
+
+            # Now s should look like "(left_expr,right_expr)". We must
+            # replace the top-level comma between the two expressions
+            # with "=".
+            formatted = s
+            if s.startswith("(") and s.endswith(")"):
+                inner = s[1:-1]
+                depth = 0
+                split_idx = None
+                for i, ch in enumerate(inner):
+                    if ch == "(":
+                        depth += 1
+                    elif ch == ")":
+                        depth -= 1
+                    elif ch == "," and depth == 0:
+                        split_idx = i
+                        break
+                if split_idx is not None:
+                    left = inner[:split_idx].strip()
+                    right = inner[split_idx + 1 :].strip()
+                    formatted = f"({left}={right})"
+
+            # Normalise whitespace inside expressions.
+            formatted = re.sub(r",\s+", ",", formatted)
+
+            parts.append(formatted)
+
+        description = "[" + ",".join(parts) + "]"
+        rows.append((idx, description))
+
+    pandas_df = pd.DataFrame(rows, columns=["matchkey", "description"])
+    return spark.createDataFrame(pandas_df)
 
 
 def matchkey_join(
