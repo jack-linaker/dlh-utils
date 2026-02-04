@@ -15,7 +15,7 @@ class TestDfDescribe:
                 }
             )
         )
-        result = df_describe(df, output_mode="pandas", approx_distinct=False, rsd=0.05)
+        result = df_describe(spark, df)
         expected = pd.DataFrame(
             {
                 "variable": ["colA", "colB"],

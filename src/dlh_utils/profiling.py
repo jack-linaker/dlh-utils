@@ -68,20 +68,24 @@ def create_table_statements(
 
 
 def df_describe(
+    spark: SparkSession,
     df: DataFrame,
+    *,
     output_mode: Literal["pandas", "spark"] = "pandas",
     rsd: float = 0.05,
-    *,
     approx_distinct: bool = False,
 ) -> DataFrame | pd.DataFrame:
     """Profile DataFrame variables: type, length, distinctness, nulls.
 
     Produces a DataFrame containing descriptive metrics on each variable
-    within a specified DataFrame, including: - The variable type. - The
-    maximum and minimum value length. - The maximum and minimum lengths
-    before/after decimal places for float variables. - The number and
-    percentage of distinct values. - The number and percentage of null
-    and non-null values.
+    within a specified DataFrame, including:
+
+    - The variable type.
+    - The maximum and minimum value length.
+    - The maximum and minimum lengths before/after decimal places for
+      float variables.
+    - The number and percentage of distinct values.
+    - The number and percentage of null and non-null values.
 
     Parameters
     ----------
@@ -114,10 +118,10 @@ def df_describe(
     |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
     |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
     |  4|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|
-    |  5|  Maggie|       null|Simpson|2021-01-12|  F|ET74 2SP|
+    |  5|  Maggie|       NULL|Simpson|2021-01-12|  F|ET74 2SP|
     +---+--------+-----------+-------+----------+---+--------+
 
-    >>> df_describe(df, output_mode="spark", approx_distinct=False, rsd=0.05).show()
+    >>> df_describe(df, output_mode="spark").show()
     +-----------+------+---------+--------+------------------+----+
     |   variable|  type|row_count|distinct|  percent_distinct|null|
     +-----------+------+---------+--------+------------------+----+
@@ -130,8 +134,6 @@ def df_describe(
     |   Postcode|string|        6|       1|16.666666666666664|   0|
     +-----------+------+---------+--------+------------------+----+ ... output truncated
     """
-    spark = SparkSession.builder.getOrCreate()
-
     types = df.dtypes
     types = dict(zip([x[0] for x in types], [x[1] for x in types], strict=False))
 
@@ -144,7 +146,6 @@ def df_describe(
         distinct_df = df.agg(
             *(sf.approxCountDistinct(sf.col(c), rsd).alias(c) for c in df.columns)
         ).withColumn("summary", sf.lit("distinct"))
-
     else:
         distinct_df = df.agg(
             *(sf.countDistinct(sf.col(c)).alias(c) for c in df.columns)
@@ -169,28 +170,32 @@ def df_describe(
     if len(point_variables) != 0:
         max_l_bp_df = df.agg(
             *(
-                sf.max(sf.length(sf.col(c).cast(IntegerType()))).alias(c)
+                sf.max(sf.length(sf.col(c).try_cast(IntegerType()))).alias(c)
                 for c in point_variables
             )
         ).withColumn("summary", sf.lit("max_l_before_point"))
 
         min_l_bp_df = df.agg(
             *(
-                sf.min(sf.length(sf.col(c).cast(IntegerType()))).alias(c)
+                sf.min(sf.length(sf.col(c).try_cast(IntegerType()))).alias(c)
                 for c in point_variables
             )
         ).withColumn("summary", sf.lit("min_l_before_point"))
 
         max_l_ap_df = df.agg(
             *(
-                sf.max(sf.length(sf.reverse(sf.col(c)).cast(IntegerType()))).alias(c)
+                sf.max(sf.length(sf.reverse(sf.col(c)).try_cast(IntegerType()))).alias(
+                    c
+                )
                 for c in point_variables
             )
         ).withColumn("summary", sf.lit("max_l_after_point"))
 
         min_l_ap_df = df.agg(
             *(
-                sf.min(sf.length(sf.reverse(sf.col(c)).cast(IntegerType()))).alias(c)
+                sf.min(sf.length(sf.reverse(sf.col(c)).try_cast(IntegerType()))).alias(
+                    c
+                )
                 for c in point_variables
             )
         ).withColumn("summary", sf.lit("min_l_after_point"))
@@ -215,7 +220,6 @@ def df_describe(
     describe_df = dataframes.union_all(
         df.describe(),
         distinct_df,
-        # null_df,
         empty_df,
         max_l_df,
         min_l_df,
