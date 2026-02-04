@@ -204,18 +204,18 @@ def clerical_sample(
 ) -> DataFrame:
     """Join linked IDs to raw data and sample matches by matchkey.
 
-    Suffixes left and right dataframes with specified suffix. Joins raw
+    Suffixes left and right DataFrames with specified suffix. Joins raw
     data to linked identifier output of deterministic linkage. Returns a
     number of examples for each matchkey as specified.
 
     Parameters
     ----------
     linked_ids : pyspark.sql.DataFrame
-        DataFrame returned by deterministic_linkage(). This will include
-        variables: left identifier; right identifier and matchkey
+        DataFrame returned by `deterministic_linkage`. This will include
+        variables left identifier, right identifier, and matchkey
         number.
     mk_df : pyspark.sql.DataFrame
-        DataFrame returned by matchkey_dataframe(). This will include
+        DataFrame returned by `matchkey_dataframe`. This will include
         matchkey number and description.
     df_l : pyspark.sql.DataFrame
         Left DataFrame to be joined.
@@ -236,7 +236,7 @@ def clerical_sample(
 
     See Also
     --------
-    dataframes.union_all()
+    `dataframes.union_all`
     """
     mks = sorted(
         [x[0] for x in linked_ids.select("matchkey").dropDuplicates().collect()]
@@ -1122,7 +1122,7 @@ def order_matchkeys(
     """Order matchkeys by ascending number of matches.
 
     Orders matchkey components based on the number of matches made by
-    each matchkey in ascending order
+    each matchkey in ascending order.
 
     Parameters
     ----------
@@ -1168,7 +1168,7 @@ def order_matchkeys(
 
         df = df.groupBy("supplied_order").count().toPandas()
 
-        mk_counts = mk_counts.append(df).reset_index(drop=True)
+        mk_counts = pd.concat([mk_counts, df]).reset_index(drop=True)
 
     mk_order = mk_order.merge(mk_counts, on="supplied_order").sort_values("count")
 

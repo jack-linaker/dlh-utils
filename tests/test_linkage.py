@@ -231,7 +231,7 @@ class TestClericalSample:
             ],
         ]
         linked_ids = deterministic_linkage(df_l, df_r, "l_id", "r_id", mks, None)
-        mk_df = matchkey_dataframe(mks)
+        mk_df = matchkey_dataframe(mks, spark)
         result = clerical_sample(linked_ids, mk_df, df_l, df_r, "l_id", "r_id", n_ids=3)
         result_agg = result.groupby("matchkey").count()
         intended_schema = StructType(
