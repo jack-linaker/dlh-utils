@@ -870,7 +870,7 @@ def filter_window(
     if mode in ["min", "max"]:
         dt_target = next(dtype for name, dtype in df.dtypes if name == target)
         df = window(df, filter_window, target, mode, alias="value")
-        df = standardisation.fill_nulls(df, fill="<<<>>>", subset=["value", target])
+        df = standardisation.fill_nulls(df, value="<<<>>>", subset=["value", target])
 
         if condition:
             df = df.where(sf.col(target) == sf.col("value")).drop("value")
