@@ -6,9 +6,9 @@ from typing import Any, Literal
 import pandas as pd
 import pyspark.sql.functions as sf
 from pyspark.sql import DataFrame, SparkSession, Window
-from pyspark.sql.types import IntegerType, StringType
+from pyspark.sql.types import StringType
 
-from dlh_utils import dataframes, utilities
+from dlh_utils import utilities
 
 
 def create_table_statements(
@@ -68,7 +68,6 @@ def create_table_statements(
 
 
 def df_describe(
-    spark: SparkSession,
     df: DataFrame,
     *,
     output_mode: Literal["pandas", "spark"] = "pandas",
@@ -134,159 +133,124 @@ def df_describe(
     |   Postcode|string|        6|       1|16.666666666666664|   0|
     +-----------+------+---------+--------+------------------+----+ ... output truncated
     """
-    types = df.dtypes
-    types = dict(zip([x[0] for x in types], [x[1] for x in types], strict=False))
+    # Map of column -> Spark type name.
+    types = dict(df.dtypes)
 
-    for col in [k for k, v in types.items() if v in ["timestamp", "date", "boolean"]]:
-        df = df.withColumn(col, sf.col(col).cast(StringType()))
+    # Cast timestamps/dates/booleans to str so length/min/max works
+    # consistently.
+    for col, t in list(types.items()):
+        if t in ("timestamp", "date", "boolean"):
+            df = df.withColumn(col, sf.col(col).cast(StringType()))
 
-    count = df.count()
+    row_count = df.count()
 
-    if approx_distinct:
-        distinct_df = df.agg(
-            *(sf.approxCountDistinct(sf.col(c), rsd).alias(c) for c in df.columns)
-        ).withColumn("summary", sf.lit("distinct"))
-    else:
-        distinct_df = df.agg(
-            *(sf.countDistinct(sf.col(c)).alias(c) for c in df.columns)
-        ).withColumn("summary", sf.lit("distinct"))
-
-    empty_df = df.agg(
-        *(sf.count(sf.when(sf.col(c).rlike(r"^\s*$"), c)).alias(c) for c in df.columns)
-    ).withColumn("summary", sf.lit("empty"))
-
-    max_l_df = df.agg(
-        *(sf.max(sf.length(sf.col(c))).alias(c) for c in df.columns)
-    ).withColumn("summary", sf.lit("max_l"))
-
-    min_l_df = df.agg(
-        *(sf.min(sf.length(sf.col(c))).alias(c) for c in df.columns)
-    ).withColumn("summary", sf.lit("min_l"))
-
-    point_variables = [
-        x for x in df.columns if types[x] == "double" or types[x].startswith("decimal")
-    ]
-
-    if len(point_variables) != 0:
-        max_l_bp_df = df.agg(
-            *(
-                sf.max(sf.length(sf.col(c).try_cast(IntegerType()))).alias(c)
-                for c in point_variables
+    # Build aggregations: we compute one big agg and then pull values
+    # out.
+    agg_exprs = []
+    for c in df.columns:
+        # Distinct.
+        if approx_distinct:
+            agg_exprs.append(
+                sf.approxCountDistinct(sf.col(c), rsd).alias(f"{c}_distinct")
             )
-        ).withColumn("summary", sf.lit("max_l_before_point"))
+        else:
+            agg_exprs.append(sf.countDistinct(sf.col(c)).alias(f"{c}_distinct"))
 
-        min_l_bp_df = df.agg(
-            *(
-                sf.min(sf.length(sf.col(c).try_cast(IntegerType()))).alias(c)
-                for c in point_variables
-            )
-        ).withColumn("summary", sf.lit("min_l_before_point"))
+        # Not null (Spark's count treats NaN as non-null).
+        agg_exprs.append(sf.count(sf.col(c)).alias(f"{c}_not_null"))
 
-        max_l_ap_df = df.agg(
-            *(
-                sf.max(sf.length(sf.reverse(sf.col(c)).try_cast(IntegerType()))).alias(
-                    c
-                )
-                for c in point_variables
-            )
-        ).withColumn("summary", sf.lit("max_l_after_point"))
-
-        min_l_ap_df = df.agg(
-            *(
-                sf.min(sf.length(sf.reverse(sf.col(c)).try_cast(IntegerType()))).alias(
-                    c
-                )
-                for c in point_variables
-            )
-        ).withColumn("summary", sf.lit("min_l_after_point"))
-
-    else:
-        max_l_bp_df = spark.createDataFrame(
-            pd.DataFrame({"summary": ["max_l_before_point"]})
+        # Empty: trim and compare to empty string.
+        agg_exprs.append(
+            sf.count(
+                sf.when(sf.trim(sf.col(c).cast(StringType())) == "", sf.col(c))
+            ).alias(f"{c}_empty")
         )
 
-        min_l_bp_df = spark.createDataFrame(
-            pd.DataFrame({"summary": ["min_l_before_point"]})
-        )
+        agg_exprs.append(sf.min(sf.col(c)).alias(f"{c}_min"))
+        agg_exprs.append(sf.max(sf.col(c)).alias(f"{c}_max"))
 
-        max_l_ap_df = spark.createDataFrame(
-            pd.DataFrame({"summary": ["max_l_after_point"]})
-        )
+        # Lengths computed from string representation (handles NaN by
+        # producing 'NaN' length).
+        col_str = sf.col(c).cast(StringType())
+        agg_exprs.append(sf.max(sf.length(col_str)).alias(f"{c}_max_l"))
+        agg_exprs.append(sf.min(sf.length(col_str)).alias(f"{c}_min_l"))
 
-        min_l_ap_df = spark.createDataFrame(
-            pd.DataFrame({"summary": ["min_l_after_point"]})
-        )
+        # For point types (double/decimal) compute lengths before/after
+        # decimal point.
+        t = types.get(c, "")
+        if t == "double" or t.startswith("decimal"):
+            col_str = sf.col(c).cast(StringType())
+            before = sf.when(
+                sf.col(c).isNull() | sf.isnan(sf.col(c)), sf.lit(None)
+            ).otherwise(sf.substring_index(col_str, ".", 1))
+            after = sf.when(
+                sf.col(c).isNull() | sf.isnan(sf.col(c)), sf.lit("")
+            ).otherwise(
+                sf.when(
+                    sf.col(c).contains("."), sf.substring_index(col_str, ".", -1)
+                ).otherwise(sf.lit(""))
+            )
+            agg_exprs.append(sf.max(sf.length(before)).alias(f"{c}_max_l_bp"))
+            agg_exprs.append(sf.min(sf.length(before)).alias(f"{c}_min_l_bp"))
+            agg_exprs.append(sf.max(sf.length(after)).alias(f"{c}_max_l_ap"))
+            agg_exprs.append(sf.min(sf.length(after)).alias(f"{c}_min_l_ap"))
+        else:
+            # Keep placeholders (they'll be filled as None later).
+            agg_exprs.append(sf.lit(None).alias(f"{c}_max_l_bp"))
+            agg_exprs.append(sf.lit(None).alias(f"{c}_min_l_bp"))
+            agg_exprs.append(sf.lit(None).alias(f"{c}_max_l_ap"))
+            agg_exprs.append(sf.lit(None).alias(f"{c}_min_l_ap"))
 
-    describe_df = dataframes.union_all(
-        df.describe(),
-        distinct_df,
-        empty_df,
-        max_l_df,
-        min_l_df,
-        max_l_bp_df,
-        min_l_bp_df,
-        max_l_ap_df,
-        min_l_ap_df,
-    ).toPandas()
+    # Run the aggregated query and pull results into a dict.
+    agg_row = df.agg(*agg_exprs).collect()[0].asDict()
 
-    describe_df = describe_df.transpose().reset_index()
-    describe_df.columns = ["variable"] + list(
-        describe_df[describe_df["index"] == "summary"]
-        .reset_index(drop=True)
-        .transpose()[0]
-    )[1:]
-    describe_df = describe_df[describe_df["variable"] != "summary"]
+    # Build per-column result rows.
+    rows = []
+    for c in df.columns:
+        distinct_v = agg_row.get(f"{c}_distinct")
+        not_null_v = agg_row.get(f"{c}_not_null")
+        empty_v = agg_row.get(f"{c}_empty")
+        min_v = agg_row.get(f"{c}_min")
+        max_v = agg_row.get(f"{c}_max")
+        max_l_v = agg_row.get(f"{c}_max_l")
+        min_l_v = agg_row.get(f"{c}_min_l")
+        max_l_bp_v = agg_row.get(f"{c}_max_l_bp")
+        min_l_bp_v = agg_row.get(f"{c}_min_l_bp")
+        max_l_ap_v = agg_row.get(f"{c}_max_l_ap")
+        min_l_ap_v = agg_row.get(f"{c}_min_l_ap")
 
-    describe_df = describe_df.rename(columns={"count": "not_null"})
+        row = {
+            "variable": c,
+            "type": types.get(c, ""),
+            "row_count": int(row_count),
+            "distinct": None if distinct_v is None else int(distinct_v),
+            "percent_distinct": (int(distinct_v) / row_count) * 100
+            if distinct_v is not None
+            else None,
+            "null": row_count - int(not_null_v) if not_null_v is not None else None,
+            "percent_null": ((row_count - int(not_null_v)) / row_count) * 100
+            if not_null_v is not None
+            else None,
+            "not_null": None if not_null_v is None else int(not_null_v),
+            "percent_not_null": (int(not_null_v) / row_count) * 100
+            if not_null_v is not None
+            else None,
+            "empty": None if empty_v is None else int(empty_v),
+            "percent_empty": (int(empty_v) / row_count) * 100
+            if empty_v is not None
+            else None,
+            "min": None if types.get(c) == "string" else min_v,
+            "max": None if types.get(c) == "string" else max_v,
+            "min_l": None if min_l_v is None else int(min_l_v),
+            "max_l": None if max_l_v is None else int(max_l_v),
+            "max_l_before_point": None if max_l_bp_v is None else int(max_l_bp_v),
+            "min_l_before_point": None if min_l_bp_v is None else int(min_l_bp_v),
+            "max_l_after_point": None if max_l_ap_v is None else int(max_l_ap_v),
+            "min_l_after_point": None if min_l_ap_v is None else int(min_l_ap_v),
+        }
+        rows.append(row)
 
-    describe_df["row_count"] = count
-    describe_df["null"] = describe_df["row_count"] - describe_df["not_null"].astype(int)
-    for variable in [
-        "distinct",
-        "null",
-        "not_null",
-        "empty",
-    ]:
-        describe_df["percent_" + variable] = (
-            describe_df[variable].astype(int) / describe_df["row_count"]
-        ) * 100
-    describe_df["type"] = [types[x] for x in describe_df["variable"]]
-
-    describe_df = describe_df.reset_index(drop=True)
-    describe_df["min"] = [
-        y if describe_df["type"][x] != "string" else None
-        for x, y in enumerate(describe_df["min"])
-    ]
-
-    describe_df = describe_df.reset_index(drop=True)
-    describe_df["max"] = [
-        y if describe_df["type"][x] != "string" else None
-        for x, y in enumerate(describe_df["max"])
-    ]
-
-    describe_df = describe_df[
-        [
-            "variable",
-            "type",
-            "row_count",
-            "distinct",
-            "percent_distinct",
-            "null",
-            "percent_null",
-            "not_null",
-            "percent_not_null",
-            "empty",
-            "percent_empty",
-            "min",
-            "max",
-            "min_l",
-            "max_l",
-            "max_l_before_point",
-            "min_l_before_point",
-            "max_l_after_point",
-            "min_l_after_point",
-        ]
-    ]
+    describe_df = pd.DataFrame(rows)
 
     if output_mode == "spark":
         describe_df = utilities.pandas_to_spark(describe_df)
@@ -382,7 +346,7 @@ def value_counts(
 
             dif_df.columns = list(df)
 
-            df = df.append(dif_df).reset_index(drop=True)
+            df = pd.concat([df, dif_df]).reset_index(drop=True)
 
         return df
 
@@ -394,7 +358,6 @@ def value_counts(
 
     if output_mode == "spark":
         high = utilities.pandas_to_spark(high)
-
         low = utilities.pandas_to_spark(low)
 
     return high, low
