@@ -427,7 +427,7 @@ def clean_surname(df: DataFrame, subset: str | list[str]) -> DataFrame:
 
 
 def fill_nulls(
-    df: DataFrame, fill: Any, subset: str | list[str] | None = None
+    df: DataFrame, value: Any, subset: str | list[str] | None = None
 ) -> DataFrame:
     """Fill null and NaN with specified value.
 
@@ -435,19 +435,18 @@ def fill_nulls(
     ----------
     df : pyspark.sql.DataFrame
         DataFrame to which the function is applied.
-    fill : optional
+    fill : typing.Any, optional
         This is the value the NaN/Null values are replaced by. The data
         type of the fill value must match that of the column it is
         replacing values within.
     subset : str | list[str], optional
         The subset is the column(s) on which the function is applied. If
-        None the function applies to the whole DataFrame. Defaults to
-        None.
+        `None`, the function applies to all columns. Defaults to None.
 
     Returns
     -------
     pyspark.sql.DataFrame
-        DataFrame with null/NaN values replaced from the subset of
+        DataFrame with NULL/NaN values replaced from the subset of
         columns.
 
     Examples
@@ -456,14 +455,15 @@ def fill_nulls(
     +---+--------+-----------+-------+----------+---+--------+
     | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|
     +---+--------+-----------+-------+----------+---+--------+
-    |  1|   Homer|       null|Simpson|1983-05-12|  M|ET74 2SP|
-    |  2|   Marge|       null|Simpson|1983-03-19|  F|ET74 2SP|
-    |  3|    Bart|       null|Simpson|2012-04-01|  M|ET74 2SP|
+    |  1|   Homer|       NULL|Simpson|1983-05-12|  M|ET74 2SP|
+    |  2|   Marge|       NULL|Simpson|1983-03-19|  F|ET74 2SP|
+    |  3|    Bart|       NULL|Simpson|2012-04-01|  M|ET74 2SP|
     |  3|    Bart|      Jo-Jo|Simpson|2012-04-01|  M|ET74 2SP|
     |  4|    Lisa|      Marie|Simpson|2014-05-09|  F|ET74 2SP|
-    |  5|  Maggie|       null|Simpson|2021-01-12|  F|ET74 2SP|
+    |  5|  Maggie|       NULL|Simpson|2021-01-12|  F|ET74 2SP|
     +---+--------+-----------+-------+----------+---+--------+
-    >>> fill_nulls(df, fill="donuts", subset=None).show()
+
+    >>> fill_nulls(df, fill="donuts").show()
     +---+--------+-----------+-------+----------+---+--------+
     | ID|Forename|Middle_name|Surname|       DoB|Sex|Postcode|
     +---+--------+-----------+-------+----------+---+--------+
@@ -482,12 +482,7 @@ def fill_nulls(
         subset = [subset]
 
     for col in subset:
-        df = df.withColumn(
-            col,
-            sf.when((sf.col(col).isNull()) | (sf.isnan(sf.col(col))), fill).otherwise(
-                sf.col(col)
-            ),
-        )
+        df = df.fillna(value, col)
 
     return df
 

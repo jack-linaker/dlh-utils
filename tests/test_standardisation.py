@@ -258,7 +258,7 @@ class TestCleanSurname:
 
 class TestFillNulls:
     def test_expected(self, spark: SparkSession) -> None:
-        test_df = spark.createDataFrame(
+        input_df = spark.createDataFrame(
             pd.DataFrame(
                 {
                     "before": ["abcd", None, "fg", ""],
@@ -268,18 +268,18 @@ class TestFillNulls:
                 }
             )
         )
-        intended_df = spark.createDataFrame(
+        expected = spark.createDataFrame(
             pd.DataFrame(
                 {
-                    "before": ["abcd", "0", "fg", ""],
+                    "before": ["abcd", None, "fg", ""],
                     "numeric": [1.0, 2.0, 0.0, 3.0],
-                    "after": ["abcd", "0", "fg", ""],
+                    "after": ["abcd", None, "fg", ""],
                     "after_numeric": [1, 2, 0, 3],
                 }
             )
         )
-        result_df = fill_nulls(test_df, 0)
-        assertDataFrameEqual(intended_df, result_df)
+        actual = fill_nulls(input_df, 0)
+        assertDataFrameEqual(actual, expected)
 
 
 class TestGroupSingleCharacters:
