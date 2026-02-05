@@ -873,7 +873,7 @@ def value_counts(
     | ID|ID_count|Forename|Forename_count|Middle_name|Middle_name_count|Surname|Surname_count|
     +---+--------+--------+--------------+-----------+-----------------+-------+-------------+
     |  3|       2|    Bart|             2|      Jo-Jo|                2|Simpson|            6|
-    |  5|       1|   Homer|             1|       null|                1|       |            0|
+    |  5|       1|   Homer|             1|       NULL|                1|       |            0|
     |  1|       1|   Marge|             1|     Juliet|                1|       |            0|
     |  4|       1|  Maggie|             1|      Marie|                1|       |            0|
     |  2|       1|    Lisa|             1|        Jay|                1|       |            0|
@@ -902,7 +902,7 @@ def value_counts(
 
             dif_df.columns = list(df)
 
-            df = df.append(dif_df).reset_index(drop=True)
+            df = pd.concat([df, dif_df]).reset_index(drop=True)
 
         return df
 

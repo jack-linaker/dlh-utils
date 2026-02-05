@@ -152,7 +152,7 @@ class TestValueCounts:
             {
                 "colA": ["C", None, "A", "B", "", ""],
                 "colA_count": [3, 2, 2, 1, 0, 0],
-                "colB": [3.0, 5.0, 1.0, 2.0, 6.0, np.NaN],
+                "colB": [3.0, 5.0, 1.0, 2.0, 6.0, np.nan],
                 "colB_count": [2, 2, 1, 1, 1, 1],
             }
         )
