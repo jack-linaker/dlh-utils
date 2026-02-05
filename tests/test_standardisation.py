@@ -53,7 +53,7 @@ class TestAddLeadingZeros:
             )
         )
         result_df = add_leading_zeros(test_df, subset=["before1"], n=7)
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
 
 
 class TestAgeAt:
@@ -91,7 +91,7 @@ class TestAgeAt:
         intended_df = spark.createDataFrame(expected_data, expected_schema)
         dates = ["2022-11-03"]
         result_df = age_at(test_df, "DoB", "yyyy-MM-dd", *dates)
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
 
 
 class TestAlignForenames:
@@ -121,7 +121,7 @@ class TestAlignForenames:
             )
         )
         result_df = align_forenames(test_df, "first_name", "middle_name", "id", sep=" ")
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
 
     def test_expected_2(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
@@ -148,40 +148,44 @@ class TestAlignForenames:
             )
         )
         result_df = align_forenames(test_df, "firstName", "middleName", "identifier")
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
 
 
 class TestCastType:
     def test_expected(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
             pd.DataFrame(
-                {"before": [None, "2", "3", "4", "5"], "after": [None, 2, 3, 4, 5]}
+                {"after": [None, 2, 3, 4, 5], "before": [None, "2", "3", "4", "5"]}
             )
         )
-        intended_schema = StructType(
+
+        expected_data_1: list[list[str | float | None]] = [
+            ["NaN", None],
+            [2.0, 2],
+            [3.0, 3],
+            [4.0, 4],
+            [5.0, 5],
+        ]
+        expected_schema_1 = StructType(
             [StructField("after", StringType()), StructField("before", StringType())]
         )
-        intended_data: list[list[float | None]] = [
+        expected_1 = spark.createDataFrame(expected_data_1, expected_schema_1)
+        actual_1 = cast_type(test_df, subset="after")
+        assertDataFrameEqual(actual_1, expected_1)
+
+        expected_data_2: list[list[float | None]] = [
             [float("NaN"), None],
             [2.0, 2],
             [3.0, 3],
             [4.0, 4],
             [5.0, 5],
         ]
-        intended_df = spark.createDataFrame(intended_data, intended_schema)
-
-        # Check if it is string first.
-        result_df = cast_type(test_df, subset="after", types="string")
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
-        intended_schema = StructType(
+        expected_schema_2 = StructType(
             [StructField("after", DoubleType()), StructField("before", IntegerType())]
         )
-        intended_data = [[float("NaN"), None], [2.0, 2], [3.0, 3], [4.0, 4], [5.0, 5]]
-        intended_df2 = spark.createDataFrame(intended_data, intended_schema)
-
-        # Check if columns are the same after various conversions.
-        result_df2 = cast_type(test_df, subset="before", types="int")
-        assertDataFrameEqual(intended_df2, result_df2, ignoreColumnOrder=True)
+        expected_2 = spark.createDataFrame(expected_data_2, expected_schema_2)
+        actual_2 = cast_type(test_df, subset="before", types="int")
+        assertDataFrameEqual(actual_2, expected_2)
 
 
 class TestCleanForename:
@@ -203,7 +207,7 @@ class TestCleanForename:
             )
         )
         result_df = clean_forename(test_df, "before")
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
 
 
 class TestCleanHyphens:
@@ -227,7 +231,7 @@ class TestCleanHyphens:
             )
         )
         result_df = clean_hyphens(test_df, subset="before1")
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
 
 
 class TestCleanSurname:
@@ -249,7 +253,7 @@ class TestCleanSurname:
             )
         )
         result_df = clean_surname(test_df, "before")
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
 
 
 class TestFillNulls:
@@ -275,7 +279,7 @@ class TestFillNulls:
             )
         )
         result_df = fill_nulls(test_df, 0)
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
 
 
 class TestGroupSingleCharacters:
@@ -371,7 +375,7 @@ class TestGroupSingleCharacters:
             )
         )
         result_df = group_single_characters(test_df, subset="before1")
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
 
     def test_expected_include_terminals(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
@@ -467,7 +471,7 @@ class TestGroupSingleCharacters:
         result_df = group_single_characters(
             test_df, subset="before1", include_terminals=True
         )
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
 
 
 class TestMaxHyphen:
@@ -513,7 +517,7 @@ class TestMaxHyphen:
             )
         )
         result_df = max_hyphen(test_df, limit=2, subset=["before"])
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
         intended_df2 = spark.createDataFrame(
             pd.DataFrame(
                 {
@@ -534,7 +538,7 @@ class TestMaxHyphen:
             )
         )
         result_df2 = max_hyphen(test_df, limit=4, subset=["before"])
-        assertDataFrameEqual(intended_df2, result_df2, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df2, result_df2)
 
 
 class TestMaxWhiteSpace:
@@ -575,7 +579,7 @@ class TestMaxWhiteSpace:
             )
         )
         result_df = max_white_space(test_df, limit=2, subset=["before"])
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
         intended_df2 = spark.createDataFrame(
             pd.DataFrame(
                 {
@@ -596,7 +600,7 @@ class TestMaxWhiteSpace:
             )
         )
         result_df2 = max_white_space(test_df, limit=4, subset=["before"])
-        assertDataFrameEqual(intended_df2, result_df2, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df2, result_df2)
 
 
 class TestRegReplace:
@@ -626,10 +630,10 @@ class TestRegReplace:
                 "queen": "king",
             },
         )
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
 
 
-class TestRemovePunct:
+class TestRemovePunctuation:
     def test_expected(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
             pd.DataFrame(
@@ -650,7 +654,7 @@ class TestRemovePunct:
             )
         )
         result_df = remove_punctuation(test_df, keep="^", subset=["after", "before"])
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
 
 
 class TestReplace:
@@ -678,7 +682,7 @@ class TestReplace:
         result_df = replace(
             test_df, subset="before", replace_dict={"a": None, "c": "f"}
         )
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
         intended_df2 = spark.createDataFrame(
             pd.DataFrame(
                 {
@@ -692,7 +696,7 @@ class TestReplace:
         result_df2 = replace(
             test_df, subset=["before", "before1"], replace_dict={"a": None, "c": "f"}
         )
-        assertDataFrameEqual(intended_df2, result_df2, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df2, result_df2)
 
     def test_expected_with_join(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
@@ -724,7 +728,7 @@ class TestReplace:
         )
         print("Result")
         result_df.show()
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
 
     def test_expected_with_regex(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
@@ -753,7 +757,7 @@ class TestReplace:
             replace_dict={"^a": "A", "y$": "Y"},
             use_regex=True,
         )
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
 
     def test_value_error_on_join_and_regex(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
@@ -816,7 +820,7 @@ class TestStandardiseCase:
             )
         )
         result_df = standardise_case(test_df, subset="lower", val="upper")
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
         intended_df2 = spark.createDataFrame(
             pd.DataFrame(
                 {
@@ -827,7 +831,7 @@ class TestStandardiseCase:
             )
         )
         result_df2 = standardise_case(test_df, subset="upper", val="lower")
-        assertDataFrameEqual(intended_df2, result_df2, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df2, result_df2)
         intended_df3 = spark.createDataFrame(
             pd.DataFrame(
                 {
@@ -838,7 +842,7 @@ class TestStandardiseCase:
             )
         )
         result_df3 = standardise_case(test_df, subset="lower", val="title")
-        assertDataFrameEqual(intended_df3, result_df3, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df3, result_df3)
 
 
 class TestStandardiseDate:
@@ -864,7 +868,7 @@ class TestStandardiseDate:
             )
         )
         result_df = standardise_date(test_df, col_name="before")
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
         intended_df2 = spark.createDataFrame(
             pd.DataFrame(
                 {
@@ -878,7 +882,7 @@ class TestStandardiseDate:
         result_df2 = standardise_date(
             test_df, col_name="before", out_date_format="dd/MM/yyyy"
         )
-        assertDataFrameEqual(intended_df2, result_df2, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df2, result_df2)
         intended_df3 = spark.createDataFrame(
             pd.DataFrame(
                 {
@@ -895,7 +899,7 @@ class TestStandardiseDate:
             in_date_format="yyyy/MM/dd",
             out_date_format="dd-MM-yyyy",
         )
-        assertDataFrameEqual(intended_df3, result_df3, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df3, result_df3)
         intended_df4 = spark.createDataFrame(
             pd.DataFrame(
                 {
@@ -912,7 +916,7 @@ class TestStandardiseDate:
             in_date_format="dd-MM-yyyy",
             out_date_format="dd/MM/yyyy",
         )
-        assertDataFrameEqual(intended_df4, result_df4, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df4, result_df4)
 
 
 class TestStandardiseNull:
@@ -951,7 +955,7 @@ class TestStandardiseNull:
         result_df2 = standardise_null(
             test_df, replace="-999", subset="before1", regex=False
         )
-        assertDataFrameEqual(intended_df2, result_df2, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df2, result_df2)
 
 
 class TestStandardiseWhiteSpace:
@@ -1025,7 +1029,7 @@ class TestStandardiseWhiteSpace:
             )
         )
         result_df = standardise_white_space(test_df, subset="before", wsl="one")
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
         intended_df2 = spark.createDataFrame(
             pd.DataFrame(
                 {
@@ -1061,7 +1065,7 @@ class TestStandardiseWhiteSpace:
             )
         )
         result_df2 = standardise_white_space(test_df, subset="before2", fill="_")
-        assertDataFrameEqual(intended_df2, result_df2, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df2, result_df2)
 
     def test_expected_wsl_none(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
@@ -1133,7 +1137,7 @@ class TestStandardiseWhiteSpace:
             )
         )
         result_df3 = standardise_white_space(test_df, subset="before2", wsl="none")
-        assertDataFrameEqual(intended_df3, result_df3, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df3, result_df3)
 
 
 class TestTrim:
@@ -1159,4 +1163,4 @@ class TestTrim:
             )
         )
         result_df = trim(test_df, subset=["before1", "numeric", "after"])
-        assertDataFrameEqual(intended_df, result_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(intended_df, result_df)
