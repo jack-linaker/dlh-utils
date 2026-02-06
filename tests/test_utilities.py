@@ -36,7 +36,7 @@ class TestChunkList:
 
 class TestDescribeMetrics:
     def test_expected(self, spark: SparkSession) -> None:
-        df = spark.createDataFrame(
+        input_df = spark.createDataFrame(
             pd.DataFrame(
                 {
                     "colA": ["A", "A", "B", None, "C", "C", "C", None],
@@ -44,8 +44,7 @@ class TestDescribeMetrics:
                 }
             )
         )
-        result_df = describe_metrics(df, output_mode="pandas")
-        intended_df = pd.DataFrame(
+        expected = pd.DataFrame(
             {
                 "variable": ["colA", "colB"],
                 "type": ["string", "double"],
@@ -58,7 +57,8 @@ class TestDescribeMetrics:
                 "percent_not_null": [75, 87.5],
             }
         )
-        assert_frame_equal(result_df, intended_df)
+        actual = describe_metrics(input_df, output_mode="pandas")
+        assert_frame_equal(actual, expected)
 
 
 class TestPandasToSpark:
@@ -78,8 +78,7 @@ class TestPandasToSpark:
         pandas_df["colBigInt"] = pandas_df["colInt"].astype("int64")
         pandas_df["colFloat"] = pandas_df["colFloat"].astype("float32")
         pandas_df["colBigFloat"] = pandas_df["colBigFloat"].astype("float64")
-        result_df = pandas_to_spark(pandas_df)
-        intended_schema = StructType(
+        expected_schema = StructType(
             [
                 StructField("colDate", TimestampType()),
                 StructField("colInt", IntegerType()),
@@ -89,12 +88,13 @@ class TestPandasToSpark:
                 StructField("colString", StringType()),
             ]
         )
-        date_val = dt.datetime(1900, 1, 1, 0, 0)
-        intended_data: list[list[dt.datetime | float | str]] = [
+        date_val = dt.datetime(1900, 1, 1, 0, 0, tzinfo=dt.timezone.utc)
+        expected_data: list[list[dt.datetime | float | str]] = [
             [date_val, 1, 1, 1.0, 1.0, "hello"],
         ]
-        intended_df = spark.createDataFrame(intended_data, intended_schema)
-        assertDataFrameEqual(result_df, intended_df)
+        expected = spark.createDataFrame(expected_data, expected_schema)
+        actual = pandas_to_spark(pandas_df)
+        assertDataFrameEqual(actual, expected)
 
 
 class TestRegexMatch:

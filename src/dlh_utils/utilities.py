@@ -136,12 +136,19 @@ def describe_metrics(
     distinct_df = df.agg(
         *(sf.countDistinct(sf.col(c)).alias(c) for c in df.columns)
     ).withColumn("summary", sf.lit("distinct"))
-    null_df = df.agg(
-        *(
-            sf.count(sf.when(sf.isnan(sf.col(c)) | sf.col(c).isNull(), c)).alias(c)
-            for c in df.columns
+
+    exprs = []
+    for col in df.schema:
+        col_name = col.name
+        c = sf.col(col_name)
+        if isinstance(col.dataType, (FloatType, DoubleType)):
+            is_missing = sf.isnan(c) | c.isNull()
+        else:
+            is_missing = c.isNull()
+        exprs.append(
+            sf.sum(sf.when(is_missing, 1).otherwise(0)).cast("long").alias(col_name)
         )
-    ).withColumn("summary", sf.lit("null"))
+    null_df = df.agg(*exprs).withColumn("summary", sf.lit("null"))
 
     describe_df = dataframes.union_all(distinct_df, null_df).persist()
 
