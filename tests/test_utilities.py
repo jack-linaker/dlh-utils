@@ -57,7 +57,7 @@ class TestDescribeMetrics:
                 "percent_not_null": [75, 87.5],
             }
         )
-        actual = describe_metrics(input_df, output_mode="pandas")
+        actual = describe_metrics(spark, input_df, output_mode="pandas")
         assert_frame_equal(actual, expected)
 
 
@@ -81,9 +81,9 @@ class TestPandasToSpark:
         expected_schema = StructType(
             [
                 StructField("colDate", TimestampType()),
-                StructField("colInt", IntegerType()),
+                StructField("colInt", LongType()),
                 StructField("colBigInt", LongType()),
-                StructField("colFloat", FloatType()),
+                StructField("colFloat", DoubleType()),
                 StructField("colBigFloat", DoubleType()),
                 StructField("colString", StringType()),
             ]
@@ -93,7 +93,7 @@ class TestPandasToSpark:
             [date_val, 1, 1, 1.0, 1.0, "hello"],
         ]
         expected = spark.createDataFrame(expected_data, expected_schema)
-        actual = pandas_to_spark(pandas_df)
+        actual = pandas_to_spark(spark, pandas_df)
         assertDataFrameEqual(actual, expected)
 
 
@@ -147,7 +147,7 @@ class TestValueCounts:
                 }
             )
         )
-        result_df = value_counts(df, limit=6, output_mode="pandas")
+        result_df = value_counts(spark, df, limit=6, output_mode="pandas")
         intended_df = pd.DataFrame(
             {
                 "colA": ["C", None, "A", "B", "", ""],

@@ -6,6 +6,7 @@ Also used to produce descriptive metrics about a DataFrame.
 import os
 import re
 import subprocess
+import warnings
 from typing import Any, Literal
 
 import pandas as pd
@@ -89,7 +90,9 @@ def create_hive_table(df: DataFrame, database: str, table_name: str) -> None:
 
 
 def describe_metrics(
-    df: DataFrame, output_mode: Literal["pandas", "spark"] = "pandas"
+    spark: SparkSession,
+    df: DataFrame,
+    output_mode: Literal["pandas", "spark"] = "pandas",
 ) -> pd.DataFrame | DataFrame:
     """Summarise variable metrics.
 
@@ -196,7 +199,7 @@ def describe_metrics(
     describe_df["percent_distinct"] = describe_df["percent_distinct"].astype(float)
 
     if output_mode == "spark":
-        describe_df = pandas_to_spark(describe_df)
+        describe_df = spark.createDataFrame(describe_df)
 
     return describe_df
 
@@ -549,8 +552,11 @@ def most_recent(
     return most_recent_filepath, filetype
 
 
-def pandas_to_spark(pandas_df: pd.DataFrame) -> DataFrame:
+def pandas_to_spark(spark: SparkSession, pandas_df: pd.DataFrame) -> DataFrame:
     """Create a Spark DataFrame from a given pandas DataFrame.
+
+    .. deprecated:: 0.4.2
+       Use `pyspark.sql.SparkSession.createDataFrame` instead.
 
     Parameters
     ----------
@@ -562,49 +568,14 @@ def pandas_to_spark(pandas_df: pd.DataFrame) -> DataFrame:
     pyspark.sql.DataFrame
         A Spark DataFrame.
     """
+    warnings.warn(
+        "`pandas_to_spark` is deprecated. Use "
+        "`pyspark.sql.SparkSession.createDataFrame` instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
-    def equivalent_type(
-        _format: str,
-    ) -> TimestampType | LongType | IntegerType | DoubleType | FloatType | StringType:
-        if _format == "datetime64[ns]":
-            return TimestampType()
-
-        if _format == "int64":
-            return LongType()
-
-        if _format == "int32":
-            return IntegerType()
-
-        if _format == "float64":
-            return DoubleType()
-
-        if _format == "float32":
-            return FloatType()
-
-        return StringType()
-
-    def define_structure(string: str, format_type: str) -> StructField:
-        try:
-            var_type = equivalent_type(format_type)
-
-        except TypeError:
-            var_type = StringType()
-
-        return StructField(string, var_type)
-
-    spark = SparkSession.builder.getOrCreate()
-
-    columns = list(pandas_df.columns)
-    types = list(pandas_df.dtypes)
-
-    struct_list: list[StructField] = []
-
-    for column, var_type in zip(columns, types, strict=False):
-        struct_list.append(define_structure(column, var_type))
-
-    p_schema = StructType(struct_list)
-
-    return spark.createDataFrame(pandas_df, p_schema)
+    return spark.createDataFrame(pandas_df)
 
 
 def read_format(
@@ -854,7 +825,10 @@ def search_files(path: str, string: str) -> dict[str, list[int]]:
 
 
 def value_counts(
-    df: DataFrame, limit: int = 20, output_mode: Literal["pandas", "spark"] = "pandas"
+    spark: SparkSession,
+    df: DataFrame,
+    limit: int = 20,
+    output_mode: Literal["pandas", "spark"] = "pandas",
 ) -> DataFrame:
     """Count the most common values in all columns of a DataFrame.
 
@@ -918,7 +892,7 @@ def value_counts(
     df = pd.concat(dfs, axis=1)
 
     if output_mode == "spark":
-        df = pandas_to_spark(df)
+        df = spark.createDataFrame(df)
 
     return df
 

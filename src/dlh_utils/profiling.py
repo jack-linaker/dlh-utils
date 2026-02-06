@@ -68,6 +68,7 @@ def create_table_statements(
 
 
 def df_describe(
+    spark: SparkSession,
     df: DataFrame,
     *,
     output_mode: Literal["pandas", "spark"] = "pandas",
@@ -253,13 +254,16 @@ def df_describe(
     describe_df = pd.DataFrame(rows)
 
     if output_mode == "spark":
-        describe_df = utilities.pandas_to_spark(describe_df)
+        describe_df = spark.createDataFrame(describe_df)
 
     return describe_df
 
 
 def value_counts(
-    df: DataFrame, limit: int = 20, output_mode: Literal["pandas", "spark"] = "pandas"
+    spark: SparkSession,
+    df: DataFrame,
+    limit: int = 20,
+    output_mode: Literal["pandas", "spark"] = "pandas",
 ) -> tuple[pd.DataFrame | DataFrame, pd.DataFrame | DataFrame]:
     """Summarise top and bottom distinct value counts per DataFrame.
 
@@ -357,8 +361,8 @@ def value_counts(
     low = pd.concat(low, axis=1)
 
     if output_mode == "spark":
-        high = utilities.pandas_to_spark(high)
-        low = utilities.pandas_to_spark(low)
+        high = spark.createDataFrame(high)
+        low = spark.createDataFrame(low)
 
     return high, low
 
@@ -389,6 +393,7 @@ def hive_dtypes(database: str, table: str) -> list[Any]:
 
 
 def hive_variable_matrix(
+    spark: SparkSession,
     database: str,
     regex: str | None = None,
     output_mode: Literal["pandas", "spark"] = "spark",
@@ -443,6 +448,6 @@ def hive_variable_matrix(
     out = (out.fillna("").sort_values("variable")).reset_index(drop=True)
 
     if output_mode == "spark":
-        out = utilities.pandas_to_spark(out)
+        out = spark.createDataFrame(out)
 
     return out

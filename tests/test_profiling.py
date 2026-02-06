@@ -39,7 +39,7 @@ class TestDfDescribe:
                 "min_l_after_point": [None, 0],
             }
         )
-        actual = df_describe(df)
+        actual = df_describe(spark, df)
         assert_frame_equal(actual, expected)
 
 
@@ -97,7 +97,7 @@ class TestValueCounts:
                 }
             ),
         )
-        actual = value_counts(df, limit=10, output_mode="pandas")
+        actual = value_counts(spark, df, limit=10, output_mode="pandas")
         actual = (
             actual[0]
             .replace({"": None})
