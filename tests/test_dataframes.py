@@ -177,30 +177,30 @@ class TestCutOff:
 
 
 class TestDateDiff:
-    def test_expected(self, spark: SparkSession) -> None:
-        test_df = spark.createDataFrame(
-            pd.DataFrame(
-                {
-                    "dob": [
-                        "1983-05-12",
-                        "1983-03-19",
-                        "2012-04-01",
-                        "2012-04-01",
-                        "2014-05-09",
-                        "2021-01-12",
-                    ],
-                    "today": [
-                        "2023-05-02",
-                        "2023-05-02",
-                        "2023-05-02",
-                        "2023-05-02",
-                        "2023-05-02",
-                        "2023-05-02",
-                    ],
-                }
-            )
-        )
-        intended_df = spark.createDataFrame(
+    test_data = pd.DataFrame(
+        {
+            "dob": [
+                "1983-05-12",
+                "1983-03-19",
+                "2012-04-01",
+                "2012-04-01",
+                "2014-05-09",
+                "2021-01-12",
+            ],
+            "today": [
+                "2023-05-02",
+                "2023-05-02",
+                "2023-05-02",
+                "2023-05-02",
+                "2023-05-02",
+                "2023-05-02",
+            ],
+        }
+    )
+
+    def test_date_difference_in_days(self, spark: SparkSession) -> None:
+        test_df = spark.createDataFrame(self.test_data)
+        expected = spark.createDataFrame(
             pd.DataFrame(
                 {
                     "dob": [
@@ -223,11 +223,14 @@ class TestDateDiff:
                 }
             )
         )
-        result_df = date_diff(
+        actual = date_diff(
             test_df, "dob", "today", in_date_format="yyyy-MM-dd", units="days"
         )
-        assertDataFrameEqual(intended_df, result_df)
-        intended_df_2 = spark.createDataFrame(
+        assertDataFrameEqual(actual, expected)
+
+    def test_date_difference_in_months(self, spark: SparkSession) -> None:
+        test_df = spark.createDataFrame(self.test_data)
+        expected = spark.createDataFrame(
             pd.DataFrame(
                 {
                     "dob": [
@@ -250,11 +253,14 @@ class TestDateDiff:
                 }
             )
         )
-        result_df2 = date_diff(
+        actual = date_diff(
             test_df, "dob", "today", in_date_format="yyyy-MM-dd", units="months"
         )
-        assertDataFrameEqual(intended_df_2, result_df2)
-        intended_df_3 = spark.createDataFrame(
+        assertDataFrameEqual(actual, expected)
+
+    def test_date_difference_in_years(self, spark: SparkSession) -> None:
+        test_df = spark.createDataFrame(self.test_data)
+        expected = spark.createDataFrame(
             pd.DataFrame(
                 {
                     "dob": [
@@ -277,10 +283,10 @@ class TestDateDiff:
                 }
             )
         )
-        result_df3 = date_diff(
+        actual = date_diff(
             test_df, "dob", "today", in_date_format="yyyy-MM-dd", units="years"
         )
-        assertDataFrameEqual(intended_df_3, result_df3)
+        assertDataFrameEqual(actual, expected)
 
 
 class TestDropColumns:
