@@ -1,3 +1,7 @@
+[build-system]
+requires = ["uv_build>=0.9.26,<0.10.0"]
+build-backend = "uv_build"
+
 [project]
 name = "dlh-utils"
 version = "0.5.0"
@@ -16,26 +20,23 @@ dependencies = [
     "jellyfish>=1.2.1",
     "numpy>=2.2.6",
     "openpyxl>=3.1.5",
-    "pandas[output-formatting]>=2.3.3",
+    "pandas[output-formatting]~=2.3.3",
     "py4j>=0.10.9.9",
     "pyspark>=4.1.1",
 ]
 
 [dependency-groups]
-dev = [
-    { include-group = "lint" },
-    { include-group = "test" },
-]
+dev = [{ include-group = "lint" }, { include-group = "test" }]
 lint = ["ruff>=0.14.14"]
-test = ["pytest>=9.0.2", "pytest-cov>=7.0.0"]
+test = [
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "typing-extensions>=4.15.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/jack-linaker/dlh-utils"
 Repository = "https://github.com/jack-linaker/dlh-utils"
-
-[build-system]
-requires = ["uv_build>=0.9.26,<0.10.0"]
-build-backend = "uv_build"
 
 [tool.ruff.lint]
 select = ["ALL"]
