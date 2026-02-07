@@ -25,7 +25,6 @@ dependencies = [
 dev = [
     { include-group = "lint" },
     { include-group = "test" },
-    "rust-just>=1.46.0",
 ]
 lint = ["ruff>=0.14.14"]
 test = ["pytest>=9.0.2", "pytest-cov>=7.0.0"]
