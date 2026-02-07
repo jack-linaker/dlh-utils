@@ -301,7 +301,7 @@ def date_diff(
     col_name1: str,
     col_name2: str,
     diff: str = "Difference",
-    in_date_format: str = "dd-MM-yyyy",
+    in_date_format: str = "yyyy-MM-dd",
     units: Literal["days", "months", "years"] = "days",
     *,
     absolute: bool = True,
@@ -316,30 +316,30 @@ def date_diff(
     Parameters
     ----------
     df : pyspark.sql.DataFrame
-        DataFrame to which the function is applied.
+        A DataFrame to which the function is applied.
     col_name1 : str
-        Name of the first column with values representing dates.
+        The name of the first column with values representing dates.
     col_name2 : str
-        Name of second column with values representing dates.
+        The name of second column with values representing dates.
     diff : str, optional
-        Name of the column in which the difference between dates will be
-        shown. Defaults to "Difference".
+        The name of the column in which the difference between dates
+        will be shown. Defaults to "Difference".
     in_date_format : str, optional
-        User must specify the format of how the dates are entered in
-        both `col_name1` and `col_name2` and use this argument to do so.
-        Defaults to "dd-MM-yyyy".
+        The format of how the dates are entered in both `col_name1` and
+        `col_name2`. Defaults to "yyyy-MM-dd".
     units : {"days", "months", "years"}, optional
-        Units of how the difference in the two date columns will be
-        represented in the `diff` column. Defaults to "days".
+        The units of how the difference between the two date columns
+        will be represented in the `diff` column. Defaults to "days".
     absolute : bool, optional
-        Bool toggle allowing user to display all values as absolute or
-        non-absolute values in the `diff` column. Defaults to True.
+        If True, each value in the `diff` column will be absolute (the
+        magnitude of the number without regard to its sign). Defaults to
+        True.
 
     Returns
     -------
     pyspark.sql.DataFrame
-        DataFrame with new column appended showing the time difference
-        between `col_name1` and `col_name2` columns in the units
+        A DataFrame with a new column showing the time difference
+        between `col_name1` and `col_name2` columns in the `units`
         specified.
 
     Examples
@@ -355,15 +355,8 @@ def date_diff(
     |  4|    Lisa|Simpson|2014-05-09|  F|ET74 2SP|2022-11-07|
     |  5|  Maggie|Simpson|2021-01-12|  F|ET74 2SP|2022-11-07|
     +---+--------+-------+----------+---+--------+----------+
-    >>> date_diff(
-    ...     df,
-    ...     "DoB",
-    ...     "Today",
-    ...     diff="Difference",
-    ...     in_date_format="yyyy-MM-dd",
-    ...     units="days",
-    ...     absolute=True,
-    ... ).show()
+
+    >>> date_diff(df, "DoB", "Today").show()
     +---+--------+-------+----------+---+--------+----------+----------+
     | ID|Forename|Surname|       DoB|Sex|Postcode|     Today|Difference|
     +---+--------+-------+----------+---+--------+----------+----------+
@@ -382,18 +375,17 @@ def date_diff(
     )
 
     if units == "days":
-        df = df.withColumn(diff, (sf.col(diff) / 86400))
-        df = df.withColumn(diff, sf.round(diff, 2))
+        df = df.withColumn(diff, sf.date_diff(col_name2, col_name1).cast("long"))
     elif units == "months":
         # "months" value is slightly inaccurate as it assumes every
         # month is a 31-day month.
-        df = df.withColumn(diff, sf.col(diff) / (31 * 86400))
-        df = df.withColumn(diff, sf.round(diff, 2))
+        df = df.withColumn(diff, sf.round(sf.col(diff) / (31 * 86400), 2))
     elif units == "years":
-        df = df.withColumn(diff, sf.col(diff) / (86400 * 365))
-        df = df.withColumn(diff, sf.round(diff, 2))
+        df = df.withColumn(diff, sf.round(sf.col(diff) / (86400 * 365), 2))
+
     if absolute is True:
         df = df.withColumn(diff, sf.abs(sf.col(diff)))
+
     return df
 
 

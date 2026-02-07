@@ -177,115 +177,73 @@ class TestCutOff:
 
 
 class TestDateDiff:
-    test_data = pd.DataFrame(
-        {
-            "dob": [
-                "1983-05-12",
-                "1983-03-19",
-                "2012-04-01",
-                "2012-04-01",
-                "2014-05-09",
-                "2021-01-12",
-            ],
-            "today": [
-                "2023-05-02",
-                "2023-05-02",
-                "2023-05-02",
-                "2023-05-02",
-                "2023-05-02",
-                "2023-05-02",
-            ],
-        }
-    )
-
     def test_date_difference_in_days(self, spark: SparkSession) -> None:
-        test_df = spark.createDataFrame(self.test_data)
-        expected = spark.createDataFrame(
-            pd.DataFrame(
-                {
-                    "dob": [
-                        "1983-05-12",
-                        "1983-03-19",
-                        "2012-04-01",
-                        "2012-04-01",
-                        "2014-05-09",
-                        "2021-01-12",
-                    ],
-                    "today": [
-                        "2023-05-02",
-                        "2023-05-02",
-                        "2023-05-02",
-                        "2023-05-02",
-                        "2023-05-02",
-                        "2023-05-02",
-                    ],
-                    "Difference": [14600.0, 14653.96, 4048.0, 4048.0, 3280.0, 839.96],
-                }
-            )
-        )
-        actual = date_diff(
-            test_df, "dob", "today", in_date_format="yyyy-MM-dd", units="days"
-        )
+        test_data = [
+            ("1983-05-12", "2023-05-02"),
+            ("1983-03-19", "2023-05-02"),
+            ("2012-04-01", "2023-05-02"),
+            ("2012-04-01", "2023-05-02"),
+            ("2014-05-09", "2023-05-02"),
+            ("2021-01-12", "2023-05-02"),
+        ]
+        test_df = spark.createDataFrame(test_data, schema=["dob", "today"])
+        expected_schema = ["dob", "today", "Difference"]
+        expected_data = [
+            ("1983-05-12", "2023-05-02", 14600),
+            ("1983-03-19", "2023-05-02", 14654),
+            ("2012-04-01", "2023-05-02", 4048),
+            ("2012-04-01", "2023-05-02", 4048),
+            ("2014-05-09", "2023-05-02", 3280),
+            ("2021-01-12", "2023-05-02", 840),
+        ]
+        expected = spark.createDataFrame(expected_data, schema=expected_schema)
+        actual = date_diff(test_df, "dob", "today")
         assertDataFrameEqual(actual, expected)
 
     def test_date_difference_in_months(self, spark: SparkSession) -> None:
-        test_df = spark.createDataFrame(self.test_data)
-        expected = spark.createDataFrame(
-            pd.DataFrame(
-                {
-                    "dob": [
-                        "1983-05-12",
-                        "1983-03-19",
-                        "2012-04-01",
-                        "2012-04-01",
-                        "2014-05-09",
-                        "2021-01-12",
-                    ],
-                    "today": [
-                        "2023-05-02",
-                        "2023-05-02",
-                        "2023-05-02",
-                        "2023-05-02",
-                        "2023-05-02",
-                        "2023-05-02",
-                    ],
-                    "Difference": [470.97, 472.71, 130.58, 130.58, 105.81, 27.1],
-                }
-            )
-        )
-        actual = date_diff(
-            test_df, "dob", "today", in_date_format="yyyy-MM-dd", units="months"
-        )
+        test_data = [
+            ("1983-05-12", "2023-05-02"),
+            ("1983-03-19", "2023-05-02"),
+            ("2012-04-01", "2023-05-02"),
+            ("2012-04-01", "2023-05-02"),
+            ("2014-05-09", "2023-05-02"),
+            ("2021-01-12", "2023-05-02"),
+        ]
+        test_df = spark.createDataFrame(test_data, schema=["dob", "today"])
+        expected_schema = ["dob", "today", "Difference"]
+        expected_data = [
+            ("1983-05-12", "2023-05-02", 470.97),
+            ("1983-03-19", "2023-05-02", 472.71),
+            ("2012-04-01", "2023-05-02", 130.58),
+            ("2012-04-01", "2023-05-02", 130.58),
+            ("2014-05-09", "2023-05-02", 105.81),
+            ("2021-01-12", "2023-05-02", 27.1),
+        ]
+        expected = spark.createDataFrame(expected_data, schema=expected_schema)
+        actual = date_diff(test_df, "dob", "today", units="months")
         assertDataFrameEqual(actual, expected)
 
     def test_date_difference_in_years(self, spark: SparkSession) -> None:
-        test_df = spark.createDataFrame(self.test_data)
-        expected = spark.createDataFrame(
-            pd.DataFrame(
-                {
-                    "dob": [
-                        "1983-05-12",
-                        "1983-03-19",
-                        "2012-04-01",
-                        "2012-04-01",
-                        "2014-05-09",
-                        "2021-01-12",
-                    ],
-                    "today": [
-                        "2023-05-02",
-                        "2023-05-02",
-                        "2023-05-02",
-                        "2023-05-02",
-                        "2023-05-02",
-                        "2023-05-02",
-                    ],
-                    "Difference": [40.0, 40.15, 11.09, 11.09, 8.99, 2.3],
-                }
-            )
-        )
-        actual = date_diff(
-            test_df, "dob", "today", in_date_format="yyyy-MM-dd", units="years"
-        )
+        test_data = [
+            ("1983-05-12", "2023-05-02"),
+            ("1983-03-19", "2023-05-02"),
+            ("2012-04-01", "2023-05-02"),
+            ("2012-04-01", "2023-05-02"),
+            ("2014-05-09", "2023-05-02"),
+            ("2021-01-12", "2023-05-02"),
+        ]
+        test_df = spark.createDataFrame(test_data, schema=["dob", "today"])
+        expected_schema = ["dob", "today", "Difference"]
+        expected_data = [
+            ("1983-05-12", "2023-05-02", 40.0),
+            ("1983-03-19", "2023-05-02", 40.15),
+            ("2012-04-01", "2023-05-02", 11.09),
+            ("2012-04-01", "2023-05-02", 11.09),
+            ("2014-05-09", "2023-05-02", 8.99),
+            ("2021-01-12", "2023-05-02", 2.3),
+        ]
+        expected = spark.createDataFrame(expected_data, schema=expected_schema)
+        actual = date_diff(test_df, "dob", "today", units="years")
         assertDataFrameEqual(actual, expected)
 
 
