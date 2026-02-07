@@ -1,35 +1,18 @@
-"""
-Pytesting on Flags functions.
-"""
-
 import pandas as pd
-import pytest
-from chispa import assert_df_equality
 from pandas.testing import assert_frame_equal
 from pyspark.sql import SparkSession
+from pyspark.testing import assertDataFrameEqual
 
-from dlh_utils.flags import flag, flag_check
-
-pytestmark = pytest.mark.usefixtures("spark")
-
-###################################################################
+from dlh_utils.flags import flag, flag_check, flag_summary
 
 
-class TestFlag1:
-    """Test for flag function"""
-
-    @staticmethod
-    def test_expected1(spark):
-        """Test the expected functionality"""
-
+class TestFlag:
+    def test_expected_1(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {"ref_col": list(range(40)) + [None] * 10, "condition_col": 25}
-                )
+            pd.DataFrame(
+                {"ref_col": list(range(40)) + [None] * 10, "condition_col": 25}
             )
         )
-
         result_df = flag(
             test_df,
             ref_col="ref_col",
@@ -40,34 +23,23 @@ class TestFlag1:
             prefix="FLAG",
             fill_null=None,
         )
-
         intended_df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {
-                        "ref_col": list(range(40)) + [None] * 10,
-                        "condition_col": 25,
-                        "test": [False] * 25 + [True] + [False] * 24,
-                    }
-                )
+            pd.DataFrame(
+                {
+                    "ref_col": list(range(40)) + [None] * 10,
+                    "condition_col": 25,
+                    "test": [False] * 25 + [True] + [False] * 24,
+                }
             )
         )
+        assertDataFrameEqual(intended_df, result_df)
 
-        assert_df_equality(intended_df, result_df, allow_nan_equality=True)
-
-    # ===================================================================
-    @staticmethod
-    def test_expected2(spark):
-        """Test the expected functionality"""
-
+    def test_expected_2(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {"ref_col": list(range(40)) + [None] * 10, "condition_col": 25}
-                )
+            pd.DataFrame(
+                {"ref_col": list(range(40)) + [None] * 10, "condition_col": 25}
             )
         )
-
         result_df = flag(
             test_df,
             ref_col="ref_col",
@@ -78,35 +50,23 @@ class TestFlag1:
             prefix="FLAG",
             fill_null=None,
         )
-
         intended_df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {
-                        "ref_col": list(range(40)) + [None] * 10,
-                        "condition_col": 25,
-                        "test": [False] * 25 + [True] + [False] * 24,
-                    }
-                )
+            pd.DataFrame(
+                {
+                    "ref_col": list(range(40)) + [None] * 10,
+                    "condition_col": 25,
+                    "test": [False] * 25 + [True] + [False] * 24,
+                }
             )
         )
+        assertDataFrameEqual(intended_df, result_df)
 
-        assert_df_equality(intended_df, result_df, allow_nan_equality=True)
-
-    # ===================================================================
-
-    @staticmethod
-    def test_expected3(spark):
-        """Test the expected functionality"""
-
+    def test_expected_3(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {"ref_col": list(range(40)) + [None] * 10, "condition_col": 25}
-                )
+            pd.DataFrame(
+                {"ref_col": list(range(40)) + [None] * 10, "condition_col": 25}
             )
         )
-
         result_df = flag(
             test_df,
             ref_col="ref_col",
@@ -117,35 +77,23 @@ class TestFlag1:
             prefix="FLAG",
             fill_null=None,
         )
-
         intended_df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {
-                        "ref_col": list(range(40)) + [None] * 10,
-                        "condition_col": 25,
-                        "test": [True] * 25 + [False] + [True] * 24,
-                    }
-                )
+            pd.DataFrame(
+                {
+                    "ref_col": list(range(40)) + [None] * 10,
+                    "condition_col": 25,
+                    "test": [True] * 25 + [False] + [True] * 24,
+                }
             )
         )
+        assertDataFrameEqual(result_df, intended_df)
 
-        assert_df_equality(result_df, intended_df, allow_nan_equality=True)
-
-    # ===================================================================
-
-    @staticmethod
-    def test_expected4(spark):
-        """Test the expected functionality"""
-
+    def test_expected_4(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {"ref_col": list(range(40)) + [None] * 10, "condition_col": 25}
-                )
+            pd.DataFrame(
+                {"ref_col": list(range(40)) + [None] * 10, "condition_col": 25}
             )
         )
-
         result_df = flag(
             test_df,
             ref_col="ref_col",
@@ -156,35 +104,23 @@ class TestFlag1:
             prefix="FLAG",
             fill_null=None,
         )
-
         intended_df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {
-                        "ref_col": list(range(40)) + [None] * 10,
-                        "condition_col": 25,
-                        "test": [True] * 25 + [False] + [True] * 24,
-                    }
-                )
+            pd.DataFrame(
+                {
+                    "ref_col": list(range(40)) + [None] * 10,
+                    "condition_col": 25,
+                    "test": [True] * 25 + [False] + [True] * 24,
+                }
             )
         )
+        assertDataFrameEqual(result_df, intended_df)
 
-        assert_df_equality(result_df, intended_df, allow_nan_equality=True)
-
-    # ===================================================================
-
-    @staticmethod
-    def test_expected5(spark):
-        """Test the expected functionality"""
-
+    def test_expected_5(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {"ref_col": list(range(40)) + [None] * 10, "condition_col": 25}
-                )
+            pd.DataFrame(
+                {"ref_col": list(range(40)) + [None] * 10, "condition_col": 25}
             )
         )
-
         result_df = flag(
             test_df,
             ref_col="ref_col",
@@ -195,37 +131,23 @@ class TestFlag1:
             prefix="FLAG",
             fill_null=None,
         )
-
         intended_df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {
-                        "ref_col": list(range(40)) + [None] * 10,
-                        "condition_col": 25,
-                        "test": [False] * 40 + [True] * 10,
-                    }
-                )
+            pd.DataFrame(
+                {
+                    "ref_col": list(range(40)) + [None] * 10,
+                    "condition_col": 25,
+                    "test": [False] * 40 + [True] * 10,
+                }
             )
         )
+        assertDataFrameEqual(result_df, intended_df)
 
-        assert_df_equality(
-            result_df, intended_df, allow_nan_equality=True, ignore_nullable=True
-        )
-
-    # ===================================================================
-
-    @staticmethod
-    def test_expected6(spark):
-        """Test the expected functionality"""
-
+    def test_expected_6(self, spark: SparkSession) -> None:
         test_df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {"ref_col": list(range(40)) + [None] * 10, "condition_col": 25}
-                )
+            pd.DataFrame(
+                {"ref_col": list(range(40)) + [None] * 10, "condition_col": 25}
             )
         )
-
         result_df = flag(
             test_df,
             ref_col="ref_col",
@@ -236,312 +158,82 @@ class TestFlag1:
             prefix="FLAG",
             fill_null=None,
         )
-
         intended_df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {
-                        "ref_col": list(range(40)) + [None] * 10,
-                        "condition_col": 25,
-                        "test": [True] * 40 + [False] * 10,
-                    }
-                )
+            pd.DataFrame(
+                {
+                    "ref_col": list(range(40)) + [None] * 10,
+                    "condition_col": 25,
+                    "test": [True] * 40 + [False] * 10,
+                }
             )
         )
+        assertDataFrameEqual(result_df, intended_df)
 
-        assert_df_equality(
-            result_df, intended_df, allow_nan_equality=True, ignore_nullable=True
+
+class TestFlagCheck:
+    def test_expected_1(self, spark: SparkSession) -> None:
+        input_df = spark.createDataFrame(
+            pd.DataFrame({"FLAG_1": ([True] * 50) + ([False] * 50)})
         )
-
-
-###################################################################
-
-
-class TestFlagSummary1:
-    """Test for flag_summary function"""
-
-    @staticmethod
-    def test_expected7(spark):
-        """Test the expected functionality"""
-
-        df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {
-                        "name": [
-                            "John",
-                            None,
-                            "Arthur",
-                            "Nahida",
-                            "Amber",
-                            "Eula",
-                            None,
-                            "Wriothesley",
-                        ],
-                        "FLAG_nameisNotNull": [
-                            True,
-                            False,
-                            True,
-                            True,
-                            True,
-                            True,
-                            False,
-                            True,
-                        ],
-                    }
-                )
+        expected_df1 = spark.createDataFrame(
+            pd.DataFrame(
+                {"FLAG_1": ([True] * 50), "flag_count": [1] * 50, "FAIL": [True] * 50}
             )
         )
-
-        result = flag_summary(df, flags="FLAG_nameisNotNull", pandas=False)
-
-        expected = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {
-                        "flag": ["FLAG_nameisNotNull"],
-                        "true": [6],
-                        "false": [2],
-                        "rows": [8],
-                        "percent_true": [75.0],
-                        "percent_false": [25.0],
-                    }
-                )
+        expected_df2 = spark.createDataFrame(
+            pd.DataFrame(
+                {"FLAG_1": ([False] * 50), "flag_count": [0] * 50, "FAIL": [False] * 50}
             )
         )
+        expected_output = expected_df1.union(expected_df2)
+        actual_output = flag_check(input_df)
+        assertDataFrameEqual(actual_output, expected_output)
 
-        assert_df_equality(
-            result,
-            expected,
-            allow_nan_equality=True,
-            ignore_nullable=True,
-            ignore_column_order=True,
+    def test_expected_2(self, spark: SparkSession) -> None:
+        input_df = spark.createDataFrame(
+            pd.DataFrame({"FLAG_1": ([True] * 50) + ([False] * 50)})
         )
-
-    # ===================================================================
-
-    @staticmethod
-    def test_expected8(spark):
-        """Test the expected functionality"""
-
-        df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {
-                        "name": [
-                            "John",
-                            None,
-                            "Arthur",
-                            "Nahida",
-                            "Amber",
-                            "Eula",
-                            None,
-                            "Wriothesley",
-                        ],
-                        "FLAG_nameisNotNull": [
-                            True,
-                            False,
-                            True,
-                            True,
-                            True,
-                            True,
-                            False,
-                            True,
-                        ],
-                    }
-                )
+        expected_output = spark.createDataFrame(
+            pd.DataFrame(
+                {"FLAG_1": ([False] * 50), "flag_count": [0] * 50, "FAIL": [False] * 50}
             )
         )
+        actual_output = flag_check(input_df, mode="pass")
+        assertDataFrameEqual(actual_output, expected_output)
 
-        result = flag_summary(df, flags="FLAG_nameisNotNull", pandas=True)
-
-        expected = pd.DataFrame(
-            {
-                "flag": ["FLAG_nameisNotNull"],
-                "true": [6],
-                "false": [2],
-                "rows": [8],
-                "percent_true": [75.0],
-                "percent_false": [25.0],
-            }
+    def test_expected_3(self, spark: SparkSession) -> None:
+        input_df = spark.createDataFrame(
+            pd.DataFrame({"FLAG_1": ([True] * 50) + ([False] * 50)})
         )
-
-        assert_frame_equal(result, expected, check_like=True)
-
-
-###################################################################
-
-
-class TestFlagCheck1:
-    """Test for flag_check function"""
-
-    @staticmethod
-    def test_expected9(spark):
-        """Test the expected functionality"""
-
-        test_df = spark.createDataFrame(
-            (pd.DataFrame({"FLAG_1": ([True] * 50) + ([False] * 50)}))
-        )
-
-        result_df = flag_check(
-            test_df, prefix="FLAG_", flags=None, mode="master", summary=False
-        )
-
-        intended_df1 = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {
-                        "FLAG_1": ([True] * 50),
-                        "flag_count": [1] * 50,
-                        "FAIL": [True] * 50,
-                    }
-                )
+        expected_output = spark.createDataFrame(
+            pd.DataFrame(
+                {"FLAG_1": ([True] * 50), "flag_count": [1] * 50, "FAIL": [True] * 50}
             )
         )
+        actual_output = flag_check(input_df, mode="fail")
+        assertDataFrameEqual(actual_output, expected_output)
 
-        intended_df2 = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {
-                        "FLAG_1": ([False] * 50),
-                        "flag_count": [0] * 50,
-                        "FAIL": [False] * 50,
-                    }
-                )
+    def test_expected_4(self, spark: SparkSession) -> None:
+        input_df = spark.createDataFrame(
+            pd.DataFrame({"FLAG_1": [True] * 50 + [False] * 50})
+        )
+        expected_output = spark.createDataFrame(
+            pd.DataFrame(
+                {
+                    "FLAG_1": ([True] * 50),
+                    "flag_count": [1] * 50,
+                    "FAIL": [True] * 50,
+                }
             )
         )
+        actual_output = flag_check(input_df, mode="split")[1]
+        assertDataFrameEqual(actual_output, expected_output)
 
-        intended_df = intended_df1.union(intended_df2)
-
-        assert_df_equality(
-            result_df,
-            intended_df,
-            ignore_nullable=True,
-            ignore_column_order=True,
-            ignore_schema=True,
+    def test_expected_5(self, spark: SparkSession) -> None:
+        input_df = spark.createDataFrame(
+            pd.DataFrame({"FLAG_1": [True] * 50 + [False] * 50})
         )
-
-    # ===================================================================
-
-    @staticmethod
-    def test_expected10(spark):
-        """Test the expected functionality"""
-
-        test_df = spark.createDataFrame(
-            (pd.DataFrame({"FLAG_1": ([True] * 50) + ([False] * 50)}))
-        )
-
-        result_df = flag_check(
-            test_df,
-            prefix="FLAG_",
-            flags=None,
-            mode="pass",
-            summary=False,
-        )
-
-        intended_df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {
-                        "FLAG_1": ([False] * 50),
-                        "flag_count": [0] * 50,
-                        "FAIL": [False] * 50,
-                    }
-                )
-            )
-        )
-
-        assert_df_equality(
-            result_df,
-            intended_df,
-            ignore_nullable=True,
-            ignore_column_order=True,
-            ignore_schema=True,
-        )
-
-    # ===================================================================
-
-    @staticmethod
-    def test_expected11(spark):
-        """Test the expected functionality"""
-
-        test_df = spark.createDataFrame(
-            (pd.DataFrame({"FLAG_1": ([True] * 50) + ([False] * 50)}))
-        )
-
-        result_df = flag_check(
-            test_df, prefix="FLAG_", flags=None, mode="fail", summary=False
-        )
-
-        intended_df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {
-                        "FLAG_1": ([True] * 50),
-                        "flag_count": [1] * 50,
-                        "FAIL": [True] * 50,
-                    }
-                )
-            )
-        )
-
-        assert_df_equality(
-            result_df,
-            intended_df,
-            ignore_nullable=True,
-            ignore_column_order=True,
-            ignore_schema=True,
-        )
-
-    # ===================================================================
-
-    @staticmethod
-    def test_expected12(spark):
-        """Test the expected functionality"""
-
-        test_df = spark.createDataFrame(
-            (pd.DataFrame({"FLAG_1": [True] * 50 + [False] * 50}))
-        )
-
-        result_df2 = flag_check(
-            test_df, prefix="FLAG_", flags=None, mode="split", summary=False
-        )[1]
-
-        intended_df = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {
-                        "FLAG_1": ([True] * 50),
-                        "flag_count": [1] * 50,
-                        "FAIL": [True] * 50,
-                    }
-                )
-            )
-        )
-
-        assert_df_equality(
-            result_df2,
-            intended_df,
-            ignore_nullable=True,
-            ignore_column_order=True,
-            ignore_schema=True,
-        )
-
-    # ===================================================================
-
-    @staticmethod
-    def test_expected13(spark):
-        """Test the expected functionality"""
-
-        test_df = spark.createDataFrame(
-            (pd.DataFrame({"FLAG_1": [True] * 50 + [False] * 50}))
-        )
-
-        result_df1, result_df2 = flag_check(
-            test_df, prefix="FLAG_", flags=None, mode="master", summary=True
-        )
-
-        intended_df1 = spark.createDataFrame(
+        expected_output_1 = spark.createDataFrame(
             pd.concat(
                 [
                     pd.DataFrame(
@@ -561,52 +253,27 @@ class TestFlagCheck1:
                 ]
             )
         )
-
-        intended_df2 = spark.createDataFrame(
-            (
-                pd.DataFrame(
-                    {
-                        "flag": ["FLAG_1", "FAIL"],
-                        "true": [50] * 2,
-                        "false": [50] * 2,
-                        "rows": [100] * 2,
-                        "percent_true": [50.0] * 2,
-                        "percent_false": [50.0] * 2,
-                    }
-                )
+        expected_output_2 = spark.createDataFrame(
+            pd.DataFrame(
+                {
+                    "flag": ["FLAG_1", "FAIL"],
+                    "true": [50] * 2,
+                    "false": [50] * 2,
+                    "rows": [100] * 2,
+                    "percent_true": [50.0] * 2,
+                    "percent_false": [50.0] * 2,
+                }
             )
         )
+        actual_output_1, actual_output_2 = flag_check(input_df, summary=True)
+        assertDataFrameEqual(actual_output_1, expected_output_1)
+        assertDataFrameEqual(actual_output_2, expected_output_2)
 
-        assert_df_equality(
-            result_df1,
-            intended_df1,
-            ignore_nullable=True,
-            ignore_column_order=True,
-            ignore_schema=True,
-        )
-
-        assert_df_equality(
-            result_df2,
-            intended_df2,
-            ignore_nullable=True,
-            ignore_column_order=True,
-            ignore_schema=True,
-        )
-
-    # ===================================================================
-
-    @staticmethod
-    def test_expected14(spark):
-        """Test the expected functionality"""
-
+    def test_expected_6(self, spark: SparkSession) -> None:
         pretest_df_orig = spark.createDataFrame(
-            (pd.DataFrame({"FLAG_1": [True] * 50 + [False] * 50}))
+            pd.DataFrame({"FLAG_1": [True] * 50 + [False] * 50})
         )
-
-        pretest_df2 = flag_check(
-            pretest_df_orig, prefix="FLAG_", flags=None, mode="master", summary=True
-        )[1]
-
+        pretest_df2 = flag_check(pretest_df_orig, summary=True)[1]
         test_df = (
             pretest_df2.toPandas()
             == spark.createDataFrame(
@@ -617,9 +284,7 @@ class TestFlagCheck1:
                 ["flag", "true", "false", "rows", "percent_true", "percent_false"],
             ).toPandas()
         )
-
         result_df = spark.createDataFrame(test_df)
-
         intended_df = spark.createDataFrame(
             pd.DataFrame(
                 {
@@ -632,14 +297,88 @@ class TestFlagCheck1:
                 }
             )
         )
+        assertDataFrameEqual(result_df, intended_df)
 
-        assert_df_equality(
-            result_df,
-            intended_df,
-            ignore_nullable=True,
-            ignore_column_order=True,
-            ignore_schema=True,
+
+class TestFlagSummary:
+    def test_expected_1(self, spark: SparkSession) -> None:
+        df = spark.createDataFrame(
+            pd.DataFrame(
+                {
+                    "name": [
+                        "John",
+                        None,
+                        "Arthur",
+                        "Nahida",
+                        "Amber",
+                        "Eula",
+                        None,
+                        "Wriothesley",
+                    ],
+                    "FLAG_nameisNotNull": [
+                        True,
+                        False,
+                        True,
+                        True,
+                        True,
+                        True,
+                        False,
+                        True,
+                    ],
+                }
+            )
         )
+        result = flag_summary(df, flags="FLAG_nameisNotNull", pandas=False)
+        expected = spark.createDataFrame(
+            pd.DataFrame(
+                {
+                    "flag": ["FLAG_nameisNotNull"],
+                    "true": [6],
+                    "false": [2],
+                    "rows": [8],
+                    "percent_true": [75.0],
+                    "percent_false": [25.0],
+                }
+            )
+        )
+        assertDataFrameEqual(result, expected, ignoreColumnOrder=True)
 
-
-###################################################################
+    def test_expected_2(self, spark: SparkSession) -> None:
+        df = spark.createDataFrame(
+            pd.DataFrame(
+                {
+                    "name": [
+                        "John",
+                        None,
+                        "Arthur",
+                        "Nahida",
+                        "Amber",
+                        "Eula",
+                        None,
+                        "Wriothesley",
+                    ],
+                    "FLAG_nameisNotNull": [
+                        True,
+                        False,
+                        True,
+                        True,
+                        True,
+                        True,
+                        False,
+                        True,
+                    ],
+                }
+            )
+        )
+        result = flag_summary(df, flags="FLAG_nameisNotNull", pandas=True)
+        expected = pd.DataFrame(
+            {
+                "flag": ["FLAG_nameisNotNull"],
+                "true": [6],
+                "false": [2],
+                "rows": [8],
+                "percent_true": [75.0],
+                "percent_false": [25.0],
+            }
+        )
+        assert_frame_equal(result, expected, check_like=True)

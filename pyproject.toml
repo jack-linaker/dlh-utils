@@ -1,6 +1,6 @@
 [project]
 name = "dlh-utils"
-version = "0.4.1"
+version = "0.5.0"
 description = "A PySpark package used to expedite and standardise the data linkage process"
 readme = "README.md"
 license = "MIT"
@@ -16,13 +16,19 @@ dependencies = [
     "jellyfish>=1.2.1",
     "numpy>=2.2.6",
     "openpyxl>=3.1.5",
-    "pandas>=2.3.3",
+    "pandas[output-formatting]>=2.3.3",
     "py4j>=0.10.9.9",
     "pyspark>=4.1.1",
 ]
 
 [dependency-groups]
-dev = ["chispa>=0.11.1", "pytest>=9.0.2", "pytest-cov>=7.0.0", "ruff>=0.14.14"]
+dev = [
+    { include-group = "lint" },
+    { include-group = "test" },
+    "rust-just>=1.46.0",
+]
+lint = ["ruff>=0.14.14"]
+test = ["pytest>=9.0.2", "pytest-cov>=7.0.0"]
 
 [project.urls]
 Homepage = "https://github.com/jack-linaker/dlh-utils"
@@ -32,19 +38,19 @@ Repository = "https://github.com/jack-linaker/dlh-utils"
 requires = ["uv_build>=0.9.26,<0.10.0"]
 build-backend = "uv_build"
 
-[tool.ruff]
-line-length = 79
-
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = ["COM812"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py" = [
+    "D100",   # test modules do not require docstrings
+    "D101",   # test classes do not require docstrings
+    "D102",   # test methods do not require docstrings
+    "D103",   # test functions do not require docstrings
     "INP001", # pytest does not require an __init__.py
     "S101",   # pytest uses assert
 ]
-"scripts/*.py" = ["INP001"] # scripts aren't part of package
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
