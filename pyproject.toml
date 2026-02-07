@@ -1,6 +1,6 @@
 [project]
 name = "dlh-utils"
-version = "0.4.1"
+version = "0.5.0"
 description = "A PySpark package used to expedite and standardise the data linkage process"
 readme = "README.md"
 license = "MIT"
