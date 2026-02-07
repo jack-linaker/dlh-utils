@@ -22,7 +22,13 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["chispa>=0.11.1", "pytest>=9.0.2", "pytest-cov>=7.0.0", "ruff>=0.14.14"]
+dev = [
+    { include-group = "lint" },
+    { include-group = "test" },
+    "rust-just>=1.46.0",
+]
+lint = ["ruff>=0.14.14"]
+test = ["pytest>=9.0.2", "pytest-cov>=7.0.0"]
 
 [project.urls]
 Homepage = "https://github.com/jack-linaker/dlh-utils"

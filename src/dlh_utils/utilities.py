@@ -12,16 +12,7 @@ from typing import Any, Literal
 import pandas as pd
 import pyspark.sql.functions as sf
 from pyspark.sql import DataFrame, SparkSession
-from pyspark.sql.types import (
-    DoubleType,
-    FloatType,
-    IntegerType,
-    LongType,
-    StringType,
-    StructField,
-    StructType,
-    TimestampType,
-)
+from pyspark.sql.types import DoubleType, FloatType
 
 from dlh_utils import dataframes
 
@@ -555,7 +546,7 @@ def most_recent(
 def pandas_to_spark(spark: SparkSession, pandas_df: pd.DataFrame) -> DataFrame:
     """Create a Spark DataFrame from a given pandas DataFrame.
 
-    .. deprecated:: 0.4.2
+    .. deprecated:: 0.5.0
        Use `pyspark.sql.SparkSession.createDataFrame` instead.
 
     Parameters
