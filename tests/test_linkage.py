@@ -472,7 +472,7 @@ class TestDeterministicLinkage:
             ["5", "5", 2],
         ]
         intended_df = spark.createDataFrame(intended_data, intended_schema)
-        assertDataFrameEqual(result_df, intended_df, ignoreColumnOrder=True)
+        assertDataFrameEqual(result_df, intended_df)
 
 
 class TestDifflibSequenceMatcher:

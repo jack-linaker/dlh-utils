@@ -18,9 +18,8 @@ dependencies = [
     "graphframes-py>=0.10.1",
     "ipython>=8.38.0",
     "jellyfish>=1.2.1",
-    "numpy>=2.2.6",
     "openpyxl>=3.1.5",
-    "pandas[output-formatting]~=2.3.3",
+    "pandas[performance, output-formatting]~=2.2.0",
     "py4j>=0.10.9.9",
 ]
 
@@ -35,7 +34,7 @@ lint = ["ruff>=0.14.14"]
 test = ["pytest>=9.0.2", "pytest-cov>=7.0.0", "typing-extensions>=4.15.0"]
 
 [project.optional-dependencies]
-pyspark = ["pyspark[sql]>=4.1.1"]
+pyspark = ["pyspark[sql]>=3.5.0"]
 
 [project.urls]
 Homepage = "https://github.com/jack-linaker/dlh-utils"
