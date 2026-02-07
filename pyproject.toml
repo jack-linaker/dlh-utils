@@ -22,17 +22,20 @@ dependencies = [
     "openpyxl>=3.1.5",
     "pandas[output-formatting]~=2.3.3",
     "py4j>=0.10.9.9",
-    "pyspark>=4.1.1",
 ]
 
 [dependency-groups]
-dev = [{ include-group = "lint" }, { include-group = "test" }]
-lint = ["ruff>=0.14.14"]
-test = [
-    "pytest>=9.0.2",
-    "pytest-cov>=7.0.0",
-    "typing-extensions>=4.15.0",
+dev = [
+    { include-group = "lint" },
+    { include-group = "test" },
+    "prek>=0.3.2",
+    "rust-just>=1.46.0",
 ]
+lint = ["ruff>=0.14.14"]
+test = ["pytest>=9.0.2", "pytest-cov>=7.0.0", "typing-extensions>=4.15.0"]
+
+[project.optional-dependencies]
+pyspark = ["pyspark[sql]>=4.1.1"]
 
 [project.urls]
 Homepage = "https://github.com/jack-linaker/dlh-utils"
