@@ -9,7 +9,7 @@ on:
     branches: ["main"]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -22,5 +22,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Test with python ${{ matrix.python-version }}
-        run: uv run --frozen pytest
+      - name: Test highest dependency versions with python ${{ matrix.python-version }}
+        run: uv run --all-extras pytest
+      - name: Test lowest-direct dependency versions with python ${{ matrix.python-version }}
+        run: uv run --all-extras --resolution lowest-direct pytest

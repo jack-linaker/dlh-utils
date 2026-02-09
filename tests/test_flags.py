@@ -341,7 +341,7 @@ class TestFlagSummary:
                 }
             )
         )
-        assertDataFrameEqual(result, expected, ignoreColumnOrder=True)
+        assertDataFrameEqual(result, expected)
 
     def test_expected_2(self, spark: SparkSession) -> None:
         df = spark.createDataFrame(
