@@ -2,7 +2,11 @@
 # using pytest.
 name: Test
 
-on: [push]
+on:
+  push:
+    branches: ["main"]
+  pull-request:
+    branches: ["main"]
 
 jobs:
   test:
@@ -18,5 +22,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Test with python ${{ matrix.python-version }}
-        run: uv run --frozen --all-extras pytest
+      - name: Test highest dependency versions with python ${{ matrix.python-version }}
+        run: uv run --all-extras pytest
+      - name: Test lowest-direct dependency versions with python ${{ matrix.python-version }}
+        run: uv run --all-extras --resolution lowest-direct pytest

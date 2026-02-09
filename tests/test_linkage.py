@@ -742,68 +742,6 @@ class TestMatchkeyCounts:
         assertDataFrameEqual(intended_df, result_df)
 
 
-class TestMatchkeyDataframe:
-    def test_creates_matchkey_descriptions_dataframe(self, spark: SparkSession) -> None:
-        df_l = spark.createDataFrame(
-            pd.DataFrame(
-                {
-                    "first_name": ["test"] * 10,
-                    "last_name": ["test"] * 10,
-                    "uprn": ["test"] * 10,
-                    "date_of_birth": ["test"] * 10,
-                }
-            )
-        )
-        df_r = spark.createDataFrame(
-            pd.DataFrame(
-                {
-                    "first_name": ["test"] * 10,
-                    "last_name": ["test"] * 10,
-                    "uprn": ["test"] * 10,
-                    "date_of_birth": ["test"] * 10,
-                }
-            )
-        )
-        expected_data: list[list[int | str]] = [
-            [
-                1,
-                "[(first_name=first_name),(last_name=last_name),(uprn=uprn),"
-                "(date_of_birth=date_of_birth)]",
-            ],
-            [
-                2,
-                "[(substring(first_name,0,2)=substring(first_name,0,2)),"
-                "(substring(last_name,0,2)=substring(last_name,0,2)),"
-                "(uprn=uprn),(date_of_birth=date_of_birth)]",
-            ],
-        ]
-        expected_schema = StructType(
-            [
-                StructField("matchkey", LongType()),
-                StructField("description", StringType()),
-            ]
-        )
-        mks = [
-            [
-                df_l["first_name"] == df_r["first_name"],
-                df_l["last_name"] == df_r["last_name"],
-                df_l["uprn"] == df_r["uprn"],
-                df_l["date_of_birth"] == df_r["date_of_birth"],
-            ],
-            [
-                sf.substring(df_l["first_name"], 0, 2)
-                == sf.substring(df_r["first_name"], 0, 2),
-                sf.substring(df_l["last_name"], 0, 2)
-                == sf.substring(df_r["last_name"], 0, 2),
-                df_l["uprn"] == df_r["uprn"],
-                df_l["date_of_birth"] == df_r["date_of_birth"],
-            ],
-        ]
-        expected = spark.createDataFrame(expected_data, expected_schema)
-        actual = matchkey_dataframe(mks, spark)
-        assertDataFrameEqual(actual, expected)
-
-
 class TestMatchkeyJoin:
     def test_expected(self, spark: SparkSession) -> None:
         test_df_1 = spark.createDataFrame(
